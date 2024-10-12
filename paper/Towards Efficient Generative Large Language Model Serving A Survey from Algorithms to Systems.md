@@ -1,6 +1,6 @@
 ---
 date: 2024-10-09 13:14:45
-date modified: 2024-10-10 23:10:11
+date modified: 2024-10-12 19:54:07
 title: "Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems"
 tags: 
 categories: 
@@ -12,6 +12,7 @@ excerpt: LLM 的空前成功也带来了一些挑战，最明显的是它们在�
 LLM 的空前成功也带来了一些挑战，最明显的是它们在服务期间的巨大计算要求。巨大的模型大小和复杂性，加上对大量计算资源的需求，阻碍了它们在实际应用中的广泛部署。这些模型的资源密集型性质引发了对能耗、可扩展性和可访问性的担忧，阻碍了它们在没有丰富计算资源的更广泛社区中的采用。
 
 本调查的主要目的是全面概述 LLM 服务和推理的最新进展。我们将根据现有技术的基本方法对其进行系统回顾和分类，突出它们的优势和局限性。该调查将涵盖广泛的方法，包括解码算法、架构设计、模型压缩、低位量化、并行计算、内存管理、请求调度和内核优化。
+
 ### Structure
 
 ## Background
@@ -47,12 +48,13 @@ $$\text{FFN}(x)=max(0, xW_1+b_1)W_2+b_2$$
 	有效地利用硬件资源对于大型语言模型推理至关重要。将大型语言模型适应于多样化的硬件平台和架构，包括中央处理器（CPUs）、图形处理器（GPUs）和专业加速器，需要硬件感知的算法设计和优化，以充分利用底层硬件的潜力。
 -   **准确性与效率之间的权衡**
 	优化大型语言模型（LLM）推理的效率有时可能涉及到与模型准确性的权衡。在模型大小、计算复杂性和性能之间找到正确的平衡是一项具有挑战性的任务，这需要仔细考虑和评估各种算法和系统级技术。
-	
+
 ## Taxonomy
 ![](https://github.com/amor-mio-de-mi-vida/picx-images-hosting/raw/master/paper/Pasted-image-20241009150811.58hcqf64j1.webp)
 
 ### Algorithmic Innovation
 ![](https://github.com/amor-mio-de-mi-vida/picx-images-hosting/raw/master/paper/Pasted-image-20241009151413.4jo36eilim.webp)
+
 
 #### Decoding Algorithm
 - **非自回归解码**
@@ -106,6 +108,7 @@ $$\text{FFN}(x)=max(0, xW_1+b_1)W_2+b_2$$
 	LARGE LANGUAGE MODEL CASCADES WITH MIXTURE OF THOUGHT REPRESENTATIONS FOR COST-EFFICIENT REASONING
 	Chain-of-thought prompting elicits reasoning in large language models.
 	Program of thoughts prompting: Disentangling computation from reasoning for numerical reasoning tasks.
+
 #### Architecture Design
 work: Simplifying Transformer Blocks.
 - 配置缩减：
@@ -198,6 +201,7 @@ work: Simplifying Transformer Blocks.
 	Mlp-mixer: An all-mlp architecture for vision.
 	Metaformer is actually what you need for vision.
 	Language modeling with gated convolutional networks.
+
 #### Model Compression
 - 知识蒸馏：
 	`idea`: 通过大型教师模型的监督来训练一个小型学生模型。大多数先前方法都在探索白盒蒸馏，这需要访问整个教师模型的参数。
@@ -229,6 +233,150 @@ work: Simplifying Transformer Blocks.
 
 ### System Optimization
 
+#### Low-bit Quantization：
+
+`idea`:通过使用更少的比特（即少于32比特）来表示数值，一种方法是对LLM进行量化。
+
+`survey`: A comprehensive study on post-training quantization for large language models.
+
+`idea`: 量化感知训练与训练后量化，PTQ通过使用自定义的CUDA内核或编译将模型权重的计算精度甚至激活值降低到INT8或INT4。
+A Speed Odyssey for Deployable Quantization of LLMs.
+nuqmm: Quantized matmul for efficient inference of large-scale generative language models.
+Atom: Low-bit Quantization for Efficient and Accurate LLM Serving.
+LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale.
+SpQR: A Sparse-Quantized Representation for Near-Lossless LLM Weight Compression.
+Gptq: Accurate post-training quantization for generative pre-trained transformers.
+OPTQ: Accurate quantization for generative pre-trained transformers.
+AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration.
+Smoothquant: Accurate and efficient post-training quantization for large language models.
+Zeroquant: Efficient and affordable post-training quantization for large-scale transformers.
+RPTQ: Reorder-based Post-training Quantization for Large Language Models.
+UnderstandingINT4Quantization for Transformer Models: Latency Speedup, Composability, and Failure Cases.
+SqueezeLLM: Dense-and-Sparse Quantization.
+Qlora: Efficient finetuning of quantized llms.
+LLM-QAT: Data-Free Quantization Aware Training for Large Language Models.
+The case for 4-bit precision: k-bit Inference Scaling Laws.
+CacheGen: Fast Context Loading for Language Model Applications.
+Memory-Efficient Fine-Tuning of Compressed Large Language Models via sub-4-bit Integer Quantization.
+
+#### Parallel Computation.
+- 模型并行：
+	`idea`: 张量模型并行将模型层（例如，注意力、FFN）从内部维度（例如，头、隐藏层）分割成多个部分，并在单独的设备（例如，GPU）上部署每个部分。
+	Megatron-lm: Training multi-billion parameter language models using model parallelism.
+	Efficiently scaling transformer inference.
+	SUMMA: Scalable universal matrix multiplication algorithm.
+	`idea`: 管道模型并行将模型层按顺序排列在多个设备上。每个设备负责一个管道阶段，该阶段由多个连续的模型层组成。
+	Memory-efficient pipeline parallel dnn training.
+	`idea`: 序列并行有各种差异化的设计和实现，但其核心思想是通过对长序列的处理在多个GPU之间进行分割，从而分布式计算和存储负载。
+	Ring Attention with Blockwise Transformers for Near-Infinite Context.
+	Calculon: a methodology and tool for high-level co-design of systems and large language models.
+	`idea`: 自动并行用于分布式训练，通过替换它们的成本模型以适应Transformer模型的可预测运行时，可以轻松地将先前的自动搜索算法（例如，动态规划，整数线性规划）应用于LLM服务，并在无需手动干预的情况下确定最有效的并行策略。
+	Alpa: Automating inter-and {Intra-Operator} parallelism for distributed deep learning.
+	Beyond Data and Model Parallelism for Deep Neural Networks.
+	Unity: Accelerating {DNN} training through joint optimization of algebraic transformations and parallelization.
+	Galvatron: Efficient Transformer Training over Multiple GPUs Using Automatic Parallelism.
+	Cheaply Estimating Inference Efficiency Metrics for Autoregressive Transformer Models.
+	AlpaServe: Statistical Multiplexing with Model Parallelism for Deep Learning Serving.
+	FlexFlow-Serve. https://github.com/Flexflow/FlexFlow/tree/inference. Commit: 672cdad, Accessed on: 2023-11 25
+	SpotServe: Serving Generative Large Language Models on Preemptible Instances.
+	`idea`: 使能卸载技术，除了有限的设备内存（例如，GPU DRAM）之外，还使用更大但更慢的内存（例如，CPU DRAM）来保存模型参数和KV缓存。
+	LLM in a flash: Efficient Large Language Model Inference with Limited Memory.
+	Deep speed inference: Enabling efficient inference of transformer models at unprecedented scale.
+	STI: Turbocharge NLP Inference at the Edge via Elastic Pipelining.
+	SpecInfer: Accelerating Generative LLM Serving with Speculative Inference and Token Tree Verification.
+	FlexGen: High-Throughput Generative Inference of Large Language Models with a Single GPU.
+- 去中心化推理：
+	`idea`: 这种方法涉及模型和数据并行主义的结合，其中多个去中心化的自愿节点协作处理数据并推断输出。这种方法在硬件资源地理分布的场景中特别有用。
+	Petals: Collaborative inference and fine-tuning of large models.
+	HexGen: Generative Inference of Foundation Model over Heterogeneous Decentralized Environment.
+	Distributed Inference and Fine-tuning of Large Language Models Over The Internet.
+	FusionAI: Decentralized Training and Deploying LLMs with Massive Consumer-Level GPUs.
+
+#### Memory Management
+
+高效的内存管理仍然是LLM服务中的首要挑战，特别是考虑到变压器架构固有的内存密集型特性。随着对长序列推理需求的增长，KV缓存的内存占用成为了相比于模型权重和其他激活所需工作空间的主要优化目标。
+
+Efficient Memory Management for Large Language Model Serving with PagedAttention.
+SpecInfer: Accelerating Generative LLM Serving with Speculative Inference and Token Tree Verification.
+LightLLM. https://github.com/ModelTC/lightllm.
+
+显而易见，LLM推理中的内存减少与其它算法创新和系统级优化紧密相关。虽然某些方法可能适用于特定的工作负载，但它们可能会相互抵消，导致整体性能下降。在LLM推理系统的内存效率和计算性能之间找到正确的平衡仍然是一个开放且紧迫的挑战。
+
+#### Request Scheduling
+
+有效地调度传入的推理请求对于优化LLM服务至关重要，这些算法旨在最大化资源利用率，保证在延迟服务水平目标（SLO）内的响应时间，并有效处理变化的需求负载。高效地管理传入请求并优化资源利用率。
+
+Batch: machine learning inference serving on serverless platforms with adaptive batching.
+Microsecond-scale preemption for concurrent GPU-accelerated DNN inferences.
+Paella: Low-latency Model Serving with Software defined GPU Scheduling.
+PipeSwitch: Fast pipelined context switching for deep learning applications.
+Cocktail: A multidimensional optimization for model serving in cloud.
+MArk: Exploiting Cloud Services for  Machine Learning Inference Serving.
+
+考虑到可变的输出序列长度，它以首次到达优先（FCFS）的顺序在迭代级别调度引擎的执行，并允许对选定的操作集进行批处理以更好地利用硬件。
+Orca: A Distributed Serving System for Transformer-Based Generative Models.
+RayLLM. https://github.com/ray-project/ray-llm.
+NVIDIA TensorRT-LLM. https://github.com/NVIDIA/TensorRT-LLM.
+Fast Distributed Inference Serving for Large Language Models.
+SARATHI: Efficient LLM Inference by Piggybacking Decodes with Chunked Prefills.
+DeepSpeed-FastGen. https://github.com/microsoft/DeepSpeed/tree/master/blogs/deepspeed-fastgen.
+S3: Increasing GPU Utilization during Generative Inference for Higher Throughput.
+
+#### Kernel Optimization
+- 内核融合：
+	`idea`: 为了减少内核启动和内存访问的开销，内核融合被之前的深度神经网络框架和编译器广泛采用。由于LLM推理不需要反向计算，因此存在更多的内核融合机会。
+	NVIDIA Faster Transformer. https://github.com/NVIDIA/FasterTransformer.
+	TenTrans High-Performance Inference Toolkit for WMT2021 Efficiency Task.
+	Turbotransformers: an efficient gpu serving system for transformer models.
+	LightSeq: A high performance inference library for transformers.
+	A high-performance transformer boosted for variable-length inputs.
+	Welder: Scheduling Deep Learning Memory Access via Tile-graph.
+- 定制化注意力：
+	`idea`: 为了使注意力操作在GPU上高效运行，专门为注意力计算定制GPU内核是至关重要的。
+	NVIDIA cuDNN MultiHeadAttn. https://docs.nvidia.com/deeplearning/cudnn/api/index.html# cudnnMultiHeadAttnForward.
+	
+	`idea`: 用于第一次迭代（即初始/预填充/上下文/提示阶段），它并行处理输入提示中的所有token。
+	xFormers: A modular and hackable Transformer modelling library. https://github.com/facebookresearch/xformers.
+	NVIDIA CUTLASS. https://github.com/NVIDIA/cutlass.
+	Accelerating transformer networks through recomposing softmax layers.
+	Online normalizer calculation for softmax.
+	Self-attention Does Not Need $O(𝑛^2)$ Memory.
+	用于后续迭代（即增量/解码/生成阶段），每个迭代只生成一个输出token的内核。
+	
+	`idea`: 对于自回归解码，常见的做法是保存先前计算过的键和值，这样在生成新令牌时只需要计算一个查询，而不是重新运行整个序列。这个领域优化的主要方向是最大化线程占用率并最小化设备上的高带宽内存。
+	Et: re-thinking self-attention for transformer models on gpus.
+	Flash-Decoding for long-context inference
+	FlashDecoding++: Faster Large Language Model Inference on GPUs.
+	根据工作负载选择合适的并行维度对于更好的线程利用率是必要的。
+- 采样优化：
+	并行采样技术，如束搜索（beam search），通过在每次迭代中维护固定数量（即束宽）的最高分序列，有效地解码近似最优序列
+	`idea`: 提出了多种随机采样技术来引入随机性，以获得更多样化的输出。
+	Hierarchical Neural Story Generation.
+	The curious case of neural text degeneration.
+	Ctrl: A conditional transformer language model for controllable generation.
+	
+	`idea`: 由于冗余的KV缓存导致的内存压力增加，并且LLM的大词汇量（即数以万计）导致的采样效率问题。
+	LightSeq: A high performance inference library for transformers.
+- 可变序列长度：
+	`idea`: LLM推理的另一个独特挑战是序列在输入长度和输出长度上可以变化，且后者是预先未知的。一种加快推理速度的方法是一次处理多个序列的批次。然而，当一批序列具有可变的输入长度时，通常会使用填充（padding）来使它们在批量处理时长度相同，这样做浪费了计算和内存资源。
+	NVIDIA Effective Transformer. https://github.com/bytedance/effective_transformer.
+	Bytetransformer: A high-performance transformer boosted for variable-length inputs.
+	The CoRa tensor compiler: Compilation for ragged tensors with minimal padding.
+	Improving Computation and Memory Efficiency for Real-world Transformer Inference on GPUs.
+	SARATHI: Efficient LLM Inference by Piggybacking Decodes with Chunked Prefills.
+- 自动编译
+	大多数现有的LLM推理系统使用特定供应商的库作为其后端，例如cuBLAS、cuDNN和CUTLASS，这些库提供了优化的内核实现。为了进一步提高推理效率，它们还付出了巨大努力来为特定的LLM运算符（例如，注意力）在NVIDIA GPU上手动编写优化的内核。尽管有这些工作，使用自动化DNN编译器的趋势仍然存在。
+	
+	Apache TVM Unity: a vision for the ML software and hardware ecosystem.
+	Relax: Composable Abstractions for End-to-End Dynamic Machine Learning.
+	Tensorir: An abstraction for automatic tensorized program optimization.
+	SparseTIR: Composable abstractions for sparse compilation in deep learning.
+	MLIR-based code generation for GPU tensor cores.
+	Compiling machine learning programs via high-level tracing.
+	Triton: an intermediate language and compiler for tiled neural network computations.
+	TASO: optimiz ing deep learning computation with automatic generation of graph substitutions.
+	PyTorch 2.0: The Journey to Bringing Compiler Technologies to the Core of PyTorch
+	EINNET: Optimizing Tensor Programs with Derivation-Based Transformations.
 
 ## Software Frameworks
 
