@@ -5,7 +5,7 @@ tags:
   - book
 categories: 
 date created: 2024-09-27 23:09:00
-date modified: 2024-10-10 22:56:55
+date modified: 2024-10-12 14:03:39
 ---
 ## Intro
 
@@ -64,7 +64,7 @@ date modified: 2024-10-10 22:56:55
 
 {% note primary %}
 Provide Options, Don't Make Lame Excuses 提供各种选择，不要找蹩脚的借口
-{% end note %}
+{% endnote %}
 如果你确实同意要为某个结果负责，你就应切实负起责任。当你犯错误(就如同我们所有人都 会犯错误一样)、或是判断失误时，诚实地承认它，并设法给出各种选择。不要责备别人或别的东西，或是拼凑借口。除了尽你所能以外，你必须分析风险是否超出了你的控制。
 
 - **Don’t Live with Broken Windows 不要容忍破窗户**
