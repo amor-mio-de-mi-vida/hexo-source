@@ -7,7 +7,6 @@ categories:
   - Hexo
 date: 2024-09-25 13:26:08
 date modified: 2024-10-10 11:27:24
-excerpt: Welcome to use Hexo Theme Keep.This is your very first post. Check [documentation](https://keep-docs.xpoet.cn/) for more info. If you get any problems when using Keep theme, you can ask me on [GitHub](https://github.com/XPoet/hexo-theme-keep/issues).
 ---
 
 Welcome to use Hexo Theme Keep.
