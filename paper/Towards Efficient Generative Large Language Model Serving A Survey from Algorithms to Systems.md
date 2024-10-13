@@ -2,8 +2,9 @@
 date: 2024-10-09 13:14:45
 date modified: 2024-10-12 23:54:31
 title: "Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems"
-tags: 
-categories: 
+tags:
+  - paper
+categories: paper
 excerpt: LLM 的空前成功也带来了一些挑战，最明显的是它们在服务期间的巨大计算要求。巨大的模型大小和复杂性，加上对大量计算资源的需求，阻碍了它们在实际应用中的广泛部署。这些模型的资源密集型性质引发了对能耗、可扩展性和可访问性的担忧，阻碍了它们在没有丰富计算资源的更广泛社区中的采用。
 ---
 [Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems (arxiv.org)](https://arxiv.org/pdf/2312.15234)
@@ -624,6 +625,7 @@ S3: Increasing GPU Utilization during Generative Inference for Higher Throughput
 
 ## Software Frameworks
 
+![Comparison of state-of-the-art open-sourced GPU-based LLM serving systems.](https://github.com/amor-mio-de-mi-vida/picx-images-hosting/raw/master/paper/image.2krwjy3ire.webp)
 
 ## Benchmarks
 

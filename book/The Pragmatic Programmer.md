@@ -3,7 +3,7 @@ title: The Pragmatic Programmer
 date: 2024-09-27 23:09:00
 tags:
   - book
-categories: 
+categories: book
 date created: 2024-09-27 23:09:00
 date modified: 2024-10-12 14:03:39
 ---
