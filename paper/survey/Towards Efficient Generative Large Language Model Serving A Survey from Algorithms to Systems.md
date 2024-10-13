@@ -1,18 +1,19 @@
 ---
 date: 2024-10-09 13:14:45
-date modified: 2024-10-12 23:54:31
+date modified: 2024-10-13 21:18:30
 title: "Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems"
 tags:
   - paper
-categories: paper
-excerpt: LLM 的空前成功也带来了一些挑战，最明显的是它们在服务期间的巨大计算要求。巨大的模型大小和复杂性，加上对大量计算资源的需求，阻碍了它们在实际应用中的广泛部署。这些模型的资源密集型性质引发了对能耗、可扩展性和可访问性的担忧，阻碍了它们在没有丰富计算资源的更广泛社区中的采用。
+  - survey
+categories: " paper"
 ---
-[Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems (arxiv.org)](https://arxiv.org/pdf/2312.15234)
-
-## Abstract
-LLM 的空前成功也带来了一些挑战，最明显的是它们在服务期间的巨大计算要求。巨大的模型大小和复杂性，加上对大量计算资源的需求，阻碍了它们在实际应用中的广泛部署。这些模型的资源密集型性质引发了对能耗、可扩展性和可访问性的担忧，阻碍了它们在没有丰富计算资源的更广泛社区中的采用。
+LLM 的空前成功带来了一些挑战，最明显的是它们在服务期间的巨大计算要求。巨大的模型大小和复杂性，加上对大量计算资源的需求，阻碍了它们在实际应用中的广泛部署。这些模型的资源密集型性质引发了对能耗、可扩展性和可访问性的担忧，阻碍了它们在没有丰富计算资源的更广泛社区中的采用。
 
 本调查的主要目的是全面概述 LLM 服务和推理的最新进展。我们将根据现有技术的基本方法对其进行系统回顾和分类，突出它们的优势和局限性。该调查将涵盖广泛的方法，包括解码算法、架构设计、模型压缩、低位量化、并行计算、内存管理、请求调度和内核优化。
+
+[Towards Efficient Generative Large Language Model Serving: A Survey from Algorithms to Systems (arxiv.org)](https://arxiv.org/pdf/2312.15234)
+
+<!-- more -->
 
 ### Structure
 
@@ -633,11 +634,125 @@ S3: Increasing GPU Utilization during Generative Inference for Higher Throughput
 
 ## Connection with other surveys
 
+我们的调研在高效生成式大型语言模型（LLM）服务和推理方面，补充并拓展了现有领域文献的范围，同时保持了独特的关注点。在相关工作中，[144]的研究主题与我们的调研最为接近，它探讨了更通用的Transformer模型和特定领域的加速器设计。然而，我们的调研通过专门针对生成式LLM服务这一精细领域，与其他研究区分开来，这一领域尚未成为其他研究的中心。此外，一些研究深入进行了LLM在GPU上推理效率[190, 297]和新型加速器[78]的实验性研究，提供了直接关联我们服务效率研究的宝贵实证见解。此外，LLMCarbon [79] 关注了LLM部署中越来越重要的一个方面——对环境的影响（例如，碳足迹）。尽管我们的调研主要从性能角度关注效率，但这类研究提供的环境视角无疑在我们的广泛讨论中是相关且值得尊敬的。一些调研和基准测试[126]提供了关于模型压缩[113, 248, 314, 314]和量化[99, 280]的宝贵见解，这些研究为我们的相关方向探索间接提供了基础。一些研究[65, 187]为理解LLM的有效性（例如，准确性、困惑度、事实性等）提供了必要的背景，这超出了我们调研的范围。我们的调研也认可了先前专注于大规模深度神经网络（DNN）模型分布式训练的调研[42, 175]的贡献，因为它们为考虑LLM服务提供了背景信息。从本质上讲，我们的调研位于众多研究之中，从中吸取并贡献了对LLM服务效率更全面的理解，包括算法创新和系统优化。通过整合这些领域的见解，我们旨在提供一个细致而全面的概述，涵盖该领域最新的进展和挑战。
 
+Full stack optimization of transformer inference: a survey.
 
+Cheaply Estimating Inference Efficiency Metrics for Autoregressive Transformer Models.
 
+Dissecting the Runtime Performance of the Training, Fine-tuning, and Inference of Large Language Models.
+
+A Comprehensive Performance Study of Large Language Models on Novel AI Accelerators.
+
+LLMCarbon: Modeling the end-to-end Carbon Footprint of Large Language Models.
+
+Compressing LLMs: The Truth is Rarely Pure and Never Simple.
+
+Compression of deep learning models for text: A survey.
+
+Efficient methods for natural language processing: A survey.
+
+A survey on model compression for large language models.
+
+A survey of quantization methods for efficient neural network inference.
+
+A comprehensive study on post-training quantization for large language models.
+
+LLMeBench: A Flexible Framework for Accelerating LLMs Benchmarking.
+
+Generating benchmarks for factuality evaluation of language models.
+
+Demystifying parallel and distributed deep learning: An in-depth concurrency analysis.
+
+Scalable deep learning on distributed infrastructures: Challenges, techniques, and tools.
 
 ## Future Direction
 
+### 硬件加速器的发展与增强
 
+提高生成式大型语言模型（LLM）服务效率的未来进展，可能会在很大程度上依赖于专门硬件加速器的开发和完善，以及与硬件和软件优化相协调的共同设计方法。
+
+例如，将内存更紧密地集成到处理单元附近，或优化芯片架构以更好地适应LLM算法的数据流，可以显著降低延迟和能耗。这一方法在最近的GPU发展中已有体现，如NVIDIA的Hopper架构，它在HBM和SRAM容量、内存带宽、计算单元和分割带宽方面取得了改进，直接有利于LLM的处理。
+
+在这一领域的持续创新可能包括设计本质上针对生成式LLM计算模式的硬件，比如针对这些模型中常见的注意力机制和张量操作的具体需求进行优化，最终影响LLM服务系统的设计和实施。
+
+NVIDIA H100 Tensor Core GPU Architecture. https://resources.nvidia.com/en-us-tensor-core/gtc22 whitepaper-hopper.
+
+### 高效且有效的解码算法
+
+开发更高效的解码算法可以大幅提升服务的效率。鉴于对更有效地利用LLM中所包含的丰富知识的迫切需求，未来的研究可以探索不同于传统自回归方法的新途径，以实现实时应用中的生成速度提升，同时保持解码质量。
+
+一个充满希望的研究方向是广义推测推理，因为它能够在保持生成质量的同时提高效率。具体而言，可以将小型推测模型泛化到任何能够比LLM更高效地生成初步令牌的其他方法，例如知识检索器和用户定义的函数。例如，最近的一些研究工作开始使用早期退出或非自回归解码来替代初步模型。
+
+总结来说，开发像推测解码这样的高效解码算法，并结合底层系统的优化，是提升生成式LLM服务效率的一个重要机遇。
+
+SpecInfer: Accelerating Generative LLM Serving with Speculative Inference and Token Tree Verification.
+
+Inference with reference: Lossless acceleration of large language models.
+
+Fast and Robust Early-Exiting Framework for Autoregressive Language Models with Synchronized Parallel Decoding.
+
+SPEED: Speculative Pipelined Execution for Efficient Decoding.
+
+Predictive Pipelined Decoding: A Compute-Latency Trade-off for Exact LLM Decoding.
+
+Draft & Verify: Lossless Large Language Model Acceleration via Self-Speculative Decoding.
+
+Breaking the Sequential Dependency of LLM Inference Using Lookahead Decoding.
+
+Lossless acceleration for Seq2seq generation with aggressive decoding.
+
+### 长上下文/序列场景的优化。
+
+随着LLM的应用向更复杂的场景扩展，处理更长上下文或序列的需求持续上升。在处理长序列工作负载的LLM服务中，需要从算法和系统两个方面解决挑战。对于LLM来说，当序列长度超过训练期间所观察到的长度时，它们常常会出现长度泛化失效的问题，即使启用了相对位置编码或在更长的语料库上进行微调之后。即便是某些声称支持超长上下文的模型，研究也发现它们会遇到“中间损失”的问题。当前的方法试图通过减少计算序列长度的同时保留相关信息来减轻这些限制，比如采用检索增强、序列压缩和缓存等技术。对于LLM服务系统来说，长序列带来了重要挑战，包括增加的内存消耗、KV缓存的访问以及自注意力计算复杂性的成倍增加。
+
+Test Long: Attention with Linear Biases Enables Input Length Extrapolation.
+
+Extending context window of large language models via positional interpolation.
+
+LongBench: A Bilingual, Multitask Benchmark for Long Context Understanding.
+
+Lost in the middle: How language models use long contexts.
+
+Retrieval meets Long Context Large Language Models.
+
+LongLLM Lingua: Accelerating and Enhancing LLMs in Long Context Scenarios via Prompt Compression.
+
+Prompt Cache: Modular Attention Reuse for Low-Latency Inference.
+
+### 探究替代架构
+
+尽管目前Transformer模型和自注意力机制在大型语言模型（LLM）领域占据主导地位，但是探索替代架构是未来研究的一个充满希望的方向。在深度学习（DL）领域的历史上，我们见证了主导架构的持续更迭，每一次范式的转变都会带来重大的进步。基于这种趋势，考虑其他可能带来独特优势的架构方法尤为重要，特别是在提高计算效率方面。例如，一些最新的研究正在探索无注意力方法，使用纯多层感知器（MLP）架构来替代注意力机制。深度神经网络模型架构的演变不仅是一种自然的发展过程，也是为了发现更高效和有效的LLM结构方式的必要探索。
+
+Rethinking Attention: Exploring Shallow Feed-Forward Neural Networks as an Alternative to Attention Layers in Transformers.
+
+### 探索在复杂环境中的部署
+
+随着大型语言模型（LLM）应用的不断扩展，一个至关重要的未来方向是探索和优化它们在不同复杂环境中的部署。这种探索不仅限于传统的基于云的部署，还包括边缘计算、混合计算（结合云和边缘计算）、去中心化计算，以及利用更经济的资源，如抢占式实例。每一种环境都为LLM服务带来了独特的挑战和机遇。例如，边缘计算通过在数据源附近处理数据，可以实现更快的响应时间和减少带宽消耗，但同时它也面临着计算资源和存储容量有限的问题。混合计算提供了一种平衡的方法，但需要先进的管理策略来有效地分配计算任务。去中心化计算为众包计算资源提供了一条有希望的道路，但也带来了数据隐私和安全的额外考量。在抢占式资源上提供LLM服务可以显著降低成本，但需要容错机制来应对其固有的不可预测性和变异性，以确保性能的稳定和系统的可靠性。成功应对这些复杂环境中的挑战，将是实现更加强大、可扩展且高效的LLM应用的关键。
+
+The future of AI is hybrid. https://www.qualcomm.com/content/dam/qcomm-martech/dm assets/documents/Whitepaper-The-future-of-AI-is-hybrid-Part-2-Qualcomm-is-uniquely-positioned-to-scale hybrid-AI.pdf.
+
+BumbleBee: Secure Two-party Inference Framework for Large Transformers.
+
+LatticeGen: A Cooperative Framework which Hides Generated Text in a Lattice for Privacy-Aware Generation on Cloud.
+
+SpotServe: Serving Generative Large Language Models on Preemptible Instances.
+
+### 自动适应特定需求
+
+多样化的应用特定需求创造了广泛的创新LLM服务优化机遇，例如参数高效微调，从外部向量存储中进行检索，在线学习和知识更新，多模态工作负载，以及将不同LLM的能力串联起来。这些独特的挑战也要求能够自动且无缝地将LLM服务技术集成到现有的IT基础设施中，通过将优化范围扩展到整个LLM生命周期，包括数据采集和处理，自动机器学习（AutoML）和模型管理，资源分配，以及性能监控。
+
+Punica: Multi-Tenant LoRA Serving.
+
+S-LoRA: Serving Thousands of Concurrent LoRA Adapters.
+
+PetS: A Unified Framework for Parameter Efficient Transformers Serving.
+
+Improving language models by retrieving from trillions of tokens.
+
+Autogen: Enabling next-gen llm applications via multi-agent conversation framework.
+
+AutoML in the Age of Large Language Models: Current Challenges, Future Opportunities and Risks.
+
+Saturn: An Optimized Data System for Large Model Deep Learning Workloads.
 
