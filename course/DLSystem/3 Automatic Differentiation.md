@@ -1,11 +1,11 @@
 ---
-title: Welcome to use Hexo Theme Keep
+title: Automatic Differentiation
 tags:
   - course
 categories:
   - DLSystem
 date: 2024-10-16 12:52:13
-date modified: 2024-10-16 19:14:10
+date modified: 2024-10-16 22:44:46
 ---
 ## General introduction to different differentiation methods
 
