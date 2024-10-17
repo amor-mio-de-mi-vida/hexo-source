@@ -1,9 +1,9 @@
 ---
 date: 2024-10-16 20:35:39
-date modified: 2024-10-16 22:21:10
-title: Programming Model
+date modified: 2024-10-17 11:03:43
+title: Programming Model and Interface
 tags: 
-categories: []
+categories:
 ---
 # Programming Model
 ## Kernels
@@ -458,4 +458,417 @@ node_attribute.accessPolicyWindow.missProp = cudaAccessPropertyStreaming;
 // Set the attributes to a CUDA Graph Kernel node of type cudaGraphNode_t
 cudaGraphKernelNodeSetAttribute(node, cudaKernelNodeAttributeAccessPolicyWindow, &node_attribute);
 ```
+
+命中率参数（hitRatio）可用于指定接收到hitProp属性的访问比例。在上述两个示例中，全局内存区域`[ptr…ptr+num_bytes)`内60%的内存访问具有持久化属性，而40%的内存访问具有流式属性。具体哪些内存访问被归类为持久化（即hitProp）是随机的，概率大约为hitRatio；概率分布取决于硬件架构和内存范围。
+
+例如，如果L2预留缓存大小为16KB，且accessPolicyWindow中的num_bytes为32KB：
+
+- 当hitRatio为0.5时，硬件将随机选择32KB窗口中的16KB作为持久化数据，并将其缓存在预留的L2缓存区域中。
+- 当hitRatio为1.0时，硬件将尝试将整个32KB窗口缓存在预留的L2缓存区域中。由于预留区域小于窗口大小，将会驱逐缓存行以保持最近使用的16KB数据在L2缓存的预留部分中。
+
+因此，hitRatio可用于避免缓存行的频繁替换，并总体减少进出L2缓存的数据量。
+
+hitRatio值低于1.0可以用来手动控制不同CUDA流的`accessPolicyWindow`s可以在L2中缓存的数据量。例如，假设L2预留缓存大小为16KB；两个不同CUDA流中的并发内核，每个内核都有一个16KB的`accessPolicyWindow`，且hitRatio值都为1.0，它们可能会在竞争共享L2资源时驱逐对方的缓存行。然而，如果两个`accessPolicyWindows`的hitRatio值都为0.5，它们将不太可能驱逐自己的或对方的持久化缓存行。
+
+#### L2 Access Properties
+
+定义了三种不同全局内存数据访问的访问属性：
+
+1. `cudaAccessPropertyStreaming`：具有流式属性的内存访问不太可能保留在L2缓存中，因为这些访问优先被驱逐。
+
+2. `cudaAccessPropertyPersisting`：具有持久化属性的内存访问更有可能保留在L2缓存中，因为这些访问优先保留在L2缓存的预留部分。
+
+3. `cudaAccessPropertyNormal`：这个访问属性强制将先前应用的持久化访问属性重置为正常状态。来自先前CUDA内核的具有持久化属性的内存访问可能会在它们预期使用后很长时间内保留在L2缓存中。这种使用后持久性减少了L2缓存中可供后续不使用持久化属性的内核使用的缓存量。使用`cudaAccessPropertyNormal`属性重置访问属性窗口，移除了先前访问的持久化（优先保留）状态，就像先前的访问没有访问属性一样。
+
+#### L2 Persistence Example
+
+以下示例展示了如何为持久化访问预留L2缓存，通过CUDA流在CUDA内核中使用预留的L2缓存，然后重置L2缓存。
+
+```c++
+cudaStream_t stream;
+cudaStreamCreate(&stream); 
+// Create CUDA stream
+cudaDeviceProp prop; 
+// CUDA device properties variable
+cudaGetDeviceProperties( &prop, device_id); 
+// Query GPU properties
+size_t size = min( int(prop.l2CacheSize * 0.75) , prop.persistingL2CacheMaxSize );
+cudaDeviceSetLimit( cudaLimitPersistingL2CacheSize, size); 
+// set-aside 3∕4 of L2 cache for persisting accesses or the max allowed
+size_t window_size = min(prop.accessPolicyMaxWindowSize, num_bytes); 
+// Select minimum of user defined num_bytes and max window size.
+cudaStreamAttrValue stream_attribute; 
+// Stream level attributes data structure
+stream_attribute.accessPolicyWindow.base_ptr = reinterpret_cast<void*>(data1); 
+// Global Memory data pointer
+stream_attribute.accessPolicyWindow.num_bytes = window_size; 
+// Number of bytes for persistence access
+stream_attribute.accessPolicyWindow.hitRatio = 0.6; 
+// Hint for cache hit ratio
+stream_attribute.accessPolicyWindow.hitProp = cudaAccessPropertyPersisting; 
+// Persistence Property
+stream_attribute.accessPolicyWindow.missProp = cudaAccessPropertyStreaming; 
+// Type of access property on cache miss
+cudaStreamSetAttribute(stream, cudaStreamAttributeAccessPolicyWindow, &stream_attribute); 
+// Set the attributes to a CUDA Stream
+for(int i = 0; i < 10; i++) {
+	cuda_kernelA<<<grid_size,block_size,0,stream>>>(data1); 
+	// This data1 is used by a kernel multiple times
+}
+// [data1 + num_bytes) benefits from L2 persistence
+cuda_kernelB<<<grid_size,block_size,0,stream>>>(data1); 
+// A different kernel in the same stream can also benefit
+// from the persistence of data1
+stream_attribute.accessPolicyWindow.num_bytes = 0;
+// Setting the window size to 0 disable it
+cudaStreamSetAttribute(stream, cudaStreamAttributeAccessPolicyWindow, &stream_attribute);
+// Overwrite the access policy attribute to a CUDA Stream
+cudaCtxResetPersistingL2Cache();
+// Remove any persistent lines in L2
+cuda_kernelC<<<grid_size,block_size,0,stream>>>(data2);
+// data2 can now benefit from full L2 in normal mode
+```
+
+#### Reset L2 Access to Normal
+
+持久化L2缓存行可能在上一个CUDA内核使用后很长时间内仍然保留在L2缓存中。因此，将L2缓存重置为正常状态对于流式或普通内存访问来说很重要，以便它们能够以正常优先级使用L2缓存。有三种方法可以将持久化访问重置为正常状态。
+
+1. 使用访问属性`cudaAccessPropertyNormal`重置先前的持久化内存区域。
+
+2. 通过调用`cudaCtxResetPersistingL2Cache()`将所有持久化L2缓存行重置为正常状态。
+
+3. 最终未被触碰的缓存行将自动重置为正常状态。强烈建议不要依赖自动重置，因为自动重置发生所需的时间是不确定的。
+
+#### Manage Utilization of L2 set-aside cache
+
+在不同的CUDA流中并发执行的多个CUDA内核可能为其流分配了不同的访问策略窗口。然而，预留的L2缓存部分是在所有这些并发CUDA内核之间共享的。因此，这个预留缓存部分的净利用率是所有并发内核个体使用的总和。随着持久化访问量的增加，超出预留L2缓存容量的部分，将设计内存访问为持久化的好处会减少。
+
+为了管理预留L2缓存部分的使用，应用程序必须考虑以下因素： 
+
+- 预留L2缓存的大小。
+
+- 可能并发执行的CUDA内核。
+
+- 可能并发执行的所有CUDA内核的访问策略窗口。
+
+- 何时以及如何需要重置L2缓存，以允许正常或流式访问以平等优先级使用之前预留的L2缓存。
+
+#### Query L2 cache Properties
+
+与L2缓存相关的属性是cudaDeviceProp结构体的一部分，可以使用CUDA运行时API cudaGetDeviceProperties进行查询。CUDA设备属性包括以下内容：
+
+- `l2CacheSize`: GPU上可用的L2缓存总量。
+
+- `persistingL2CacheMaxSize`: 可以为持久化内存访问预留的最大L2缓存量。
+
+- `accessPolicyMaxWindowSize`: 访问策略窗口的最大大小。
+
+#### Control L2 Cache Set-Aside Size for Persisting Memory Access
+
+为持久化内存访问预留的L2缓存大小可以通过CUDA运行时API `cudaDeviceGetLimit` 查询，并使用 `cudaDeviceSetLimit` API作为 `cudaLimit` 设置。设置此限制的最大值是 `cudaDeviceProp::persistingL2CacheMaxSize`。
+
+```c++
+enum cudaLimit {
+/* other fields not shown */
+cudaLimitPersistingL2CacheSize
+};
+```
+
+### Shared Memory
+
+如变量内存空间说明符中详细描述的，共享内存是使用 `__shared__` 内存空间说明符来分配的。
+
+共享内存预计比全局内存快得多，这在线程层次结构中提到，并在共享内存部分详细说明。它可以被用作暂存内存（或软件管理的缓存），以减少CUDA块从全局内存的访问，如下面的矩阵乘法示例所示。
+
+以下代码样本是一个不利用共享内存的矩阵乘法的直接实现。每个线程读取矩阵A的一行和矩阵B的一列，并计算矩阵C对应的元素，如图8所示。因此，矩阵A从全局内存中读取B.width次，矩阵B从全局内存中读取A.height次。
+
+以下是矩阵乘法的示例代码，该代码没有使用共享内存：
+
+```c++
+// Matrices are stored in row-major order:
+// M(row, col) = *(M.elements + row * M.width + col)
+typedef struct {
+	int width;
+	int height;
+	float* elements;
+} Matrix;
+
+// Thread block size
+#define BLOCK_SIZE 16
+
+// Forward declaration of the matrix multiplication kernel
+__global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
+
+// Matrix multiplication - Host code
+// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+void MatMul(const Matrix A, const Matrix B, Matrix C) {
+	// Load A and B to device memory
+	Matrix d_A;
+	d_A.width = A.width; d_A.height = A.height;
+	size_t size = A.width * A.height * sizeof(float);
+	cudaMalloc(&d_A.elements, size);
+	cudaMemcpy(d_A.elements, A.elements, size, cudaMemcpyHostToDevice);
+	
+	Matrix d_B;
+	d_B.width = B.width; d_B.height = B.height; 
+	size = B.width * B.height * sizeof(float);
+	cudaMalloc(&d_B.elements, size);
+	cudaMemcpy(d_B.elements, B.elements, size, cudaMemcpyHostToDevice);
+	
+	// Allocate C in device memory
+	Matrix d_C;
+	d_C.width = C.width; d_C.height = C.height;
+	size = C.width * C.height * sizeof(float);
+	cudaMalloc(&d_C.elements, size);
+	
+	// Invoke kernel
+	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+	dim3 dimGrid(B.width ∕ dimBlock.x, A.height ∕ dimBlock.y);
+	MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
+	
+	// Read C from device memory
+	cudaMemcpy(C.elements, d_C.elements, size, cudaMemcpyDeviceToHost);
+	
+	// Free device memory
+	cudaFree(d_A.elements);
+	cudaFree(d_B.elements);
+	cudaFree(d_C.elements);
+}
+
+// Matrix multiplication kernel called by MatMul()
+__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
+	// Each thread computes one element of C
+	// by accumulating results into Cvalue
+	float Cvalue = 0;
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	for (int e = 0; e < A.width; ++e)
+		Cvalue += A.elements[row * A.width + e] * B.elements[e * B.width + col];
+	C.elements[row * C.width + col] = Cvalue;
+}
+```
+
+以下代码示例是利用共享内存实现的矩阵乘法。在这个实现中，每个线程块负责计算矩阵C的一个方形子矩阵Csub，而块内的每个线程负责计算Csub的一个元素。如图9所示，Csub等于两个矩形矩阵的乘积：一个是维度为(A.width, block_size)的A的子矩阵，其行索引与Csub相同；另一个是维度为(block_size, A.width)的B的子矩阵，其列索引与Csub相同。为了适应设备的资源，这两个矩形矩阵被划分为尽可能多的维度为block_size的方形矩阵，并计算这些方形矩阵乘积的和来得到Csub。每个这些乘积都是由一个线程从全局内存加载两个对应的方形矩阵到共享内存（每个矩阵一个元素），然后每个线程计算乘积的一个元素。每个线程将这些乘积的结果累加到寄存器中，完成后将结果写入全局内存。
+
+通过这种方式阻塞计算，我们利用了快速的共享内存，并且由于A只从全局内存中读取(B.width / block_size)次，B只读取(A.height / block_size)次，从而节省了大量全局内存带宽。
+
+以下是对先前代码样本中的矩阵类型进行扩充，添加了步长字段，以便可以高效地用相同的类型表示子矩阵。使用`__device__`函数来获取和设置元素，以及从矩阵构建任何子矩阵。
+
+```c++
+// Matrices are stored in row-major order:
+// M(row, col) = *(M.elements + row * M.stride + col)
+typedef struct {
+	int width;
+	int height;
+	int stride;
+	float* elements;
+} Matrix;
+
+// Get a matrix element
+__device__ float GetElement(const Matrix A, int row, int col) {
+	return A.elements[row * A.stride + col];
+}
+
+// Set a matrix element
+__device__ void SetElement(Matrix A, int row, int col, float value) {
+	A.elements[row * A.stride + col] = value;
+}
+
+// Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A that is
+// located col sub-matrices to the right and row sub-matrices down
+// from the upper-left corner of A
+__device__ Matrix GetSubMatrix(Matrix A, int row, int col) {
+	Matrix Asub;
+	Asub.width = BLOCK_SIZE;
+	Asub.height = BLOCK_SIZE;
+	Asub.stride = A.stride;
+	Asub.elements = &A.elements[A.stride * BLOCK_SIZE * row + BLOCK_SIZE * col];
+	return Asub;
+}
+
+// Thread block size
+#define BLOCK_SIZE 16
+
+// Forward declaration of the matrix multiplication kernel
+__global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
+
+// Matrix multiplication - Host code
+// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+void MatMul(const Matrix A, const Matrix B, Matrix C) {
+	// Load A and B to device memory
+	Matrix d_A;
+	d_A.width = d_A.stride = A.width; d_A.height = A.height;
+	size_t size = A.width * A.height * sizeof(float);
+	cudaMalloc(&d_A.elements, size);
+	cudaMemcpy(d_A.elements, A.elements, size, cudaMemcpyHostToDevice);
+	
+	Matrix d_B;
+	d_B.width = d_B.stride = B.width; d_B.height = B.height;
+	size = B.width * B.height * sizeof(float);
+	cudaMalloc(&d_B.elements, size);
+	cudaMemcpy(d_B.elements, B.elements, size, cudaMemcpyHostToDevice);
+	
+	// Allocate C in device memory
+	Matrix d_C;
+	d_C.width = d_C.stride = C.width; d_C.height = C.height;
+	size = C.width * C.height * sizeof(float);
+	cudaMalloc(&d_C.elements, size);
+	
+	// Invoke kernel
+	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+	dim3 dimGrid(B.width ∕ dimBlock.x, A.height ∕ dimBlock.y);
+	MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
+	
+	// Read C from device memory
+	cudaMemcpy(C.elements, d_C.elements, size,
+	cudaMemcpyDeviceToHost);
+	
+	// Free device memory
+	cudaFree(d_A.elements);
+	cudaFree(d_B.elements);
+	cudaFree(d_C.elements);
+}
+
+// Matrix multiplication kernel called by MatMul()
+__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
+	// Block row and column
+	int blockRow = blockIdx.y;
+	int blockCol = blockIdx.x;
+	
+	// Each thread block computes one sub-matrix Csub of C
+	Matrix Csub = GetSubMatrix(C, blockRow, blockCol);
+	
+	// Each thread computes one element of Csub by accumulating results into Cvalue
+	float Cvalue = 0;
+	// Thread row and column within Csub
+	int row = threadIdx.y;
+	int col = threadIdx.x;
+	// Loop over all the sub-matrices of A and B that are required to compute Csub
+	// Multiply each pair of sub-matrices together and accumulate the results
+	for (int m = 0; m < (A.width ∕ BLOCK_SIZE); ++m) {
+		// Get sub-matrix Asub of A
+		Matrix Asub = GetSubMatrix(A, blockRow, m);
+		// Get sub-matrix Bsub of B
+		Matrix Bsub = GetSubMatrix(B, m, blockCol);
+		// Shared memory used to store Asub and Bsub respectively
+		__shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
+		__shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
+		
+		// Load Asub and Bsub from device memory to shared memory
+		// Each thread loads one element of each sub-matrix
+		As[row][col] = GetElement(Asub, row, col);
+		Bs[row][col] = GetElement(Bsub, row, col);
+		// Synchronize to make sure the sub-matrices are loaded
+		// before starting the computation
+		__syncthreads();
+		// Multiply Asub and Bsub together
+		for (int e = 0; e < BLOCK_SIZE; ++e)
+			Cvalue += As[row][e] * Bs[e][col];
+			// Synchronize to make sure that the preceding
+			// computation is done before loading two new
+			// sub-matrices of A and B in the next iteration
+			__syncthreads();
+		}
+	// Write Csub to device memory
+	// Each thread writes one element
+	SetElement(Csub, row, col, Cvalue);
+}
+```
+
+### Distributed Shared Memory
+
+在计算能力9.0中引入的线程块集群（Thread Block Clusters）提供了线程块集群中的线程访问所有参与线程块的共享内存的能力。这种分区的共享内存被称为分布式共享内存（Distributed Shared Memory），相应的地址空间被称为分布式共享内存地址空间。属于线程块集群的线程可以在分布式地址空间中进行读取、写入或执行原子操作，无论地址是否属于本地线程块还是远程线程块。无论内核是否使用分布式共享内存，共享内存的大小规格（静态或动态）仍然是每个线程块的。分布式共享内存的大小只是每个集群中的线程块数量乘以每个线程块的共享内存大小。
+
+访问分布式共享内存中的数据需要所有线程块都存在。用户可以使用集群组API中的cluster.sync()来确保所有线程块都已开始执行。用户还需要确保所有分布式共享内存操作在线程块退出之前完成，例如，如果远程线程块试图读取给定线程块的共享内存，用户需要确保远程线程块读取的共享内存完成后再退出。
+
+CUDA提供了一种访问分布式共享内存的机制，应用程序可以利用其能力来获益。下面我们来看一个简单的直方图计算，以及如何使用线程块集群在GPU上对其进行优化。计算直方图的标准方法是在每个线程块的共享内存中进行计算，然后执行全局内存原子操作。这种方法的一个限制是共享内存的容量。一旦直方图箱子不再适合共享内存，用户需要直接在全局内存中计算直方图，因此需要进行原子操作。有了分布式共享内存，CUDA提供了一个中间步骤，根据直方图箱子的尺寸，直方图可以在共享内存、分布式共享内存或直接在全局内存中计算。
+
+下面的CUDA内核示例展示了如何根据直方图箱子的数量在共享内存或分布式共享内存中计算直方图。
+
+```c++
+#include <cooperative_groups.h>
+
+// Distributed Shared memory histogram kernel
+__global__ void clusterHist_kernel(int *bins, const int nbins, const int bins_per_block, const int *__restrict__ input, size_t array_size) {
+	extern __shared__ int smem[];
+	namespace cg = cooperative_groups;
+	int tid = cg::this_grid().thread_rank();
+	
+	// Cluster initialization, size and calculating local bin offsets.
+	cg::cluster_group cluster = cg::this_cluster();
+	unsigned int clusterBlockRank = cluster.block_rank();
+	int cluster_size = cluster.dim_blocks().x;
+	for (int i = threadIdx.x; i < bins_per_block; i += blockDim.x) {
+		smem[i] = 0; //Initialize shared memory histogram to zeros
+	}
+	// cluster synchronization ensures that shared memory is initialized to zero in
+	// all thread blocks in the cluster. It also ensures that all thread blocks
+	// have started executing and they exist concurrently.
+	cluster.sync();
+	for (int i = tid; i < array_size; i += blockDim.x * gridDim.x) {
+		int ldata = input[i];
+		// Find the right histogram bin.
+		int binid = ldata;
+		if (ldata < 0)
+			binid = 0;
+		else if (ldata >= nbins)
+			binid = nbins - 1;
+			
+		//Find destination block rank and offset for computing
+		//distributed shared memory histogram
+		int dst_block_rank = (int)(binid ∕ bins_per_block);
+		int dst_offset = binid % bins_per_block;
+		
+		//Pointer to target block shared memory
+		int *dst_smem = cluster.map_shared_rank(smem, dst_block_rank);
+		
+		//Perform atomic update of the histogram bin
+		atomicAdd(dst_smem + dst_offset, 1);
+		}
+	// cluster synchronization is required to ensure all distributed shared
+	// memory operations are completed and no thread block exits while
+	// other thread blocks are still accessing distributed shared memory
+	cluster.sync();
+	// Perform global memory histogram, using the local distributed memory histogram
+	int *lbins = bins + cluster.block_rank() * bins_per_block;
+	for (int i = threadIdx.x; i < bins_per_block; i += blockDim.x) {
+		atomicAdd(&lbins[i], smem[i]);
+	}
+}
+```
+
+上述内核可以在运行时根据所需的分布式共享内存量来启动集群大小。如果直方图足够小，可以只适应一个块的共享内存，用户可以以集群大小1来启动内核。下面的代码片段展示了如何根据共享内存需求动态启动集群内核。
+
+```c++
+// Launch via extensible launch
+{
+	cudaLaunchConfig_t config = {0};
+	config.gridDim = array_size ∕ threads_per_block;
+	config.blockDim = threads_per_block;
+	
+	// cluster_size depends on the histogram size.
+	// ( cluster_size == 1 ) implies no distributed shared memory, just thread block local shared memory
+	int cluster_size = 2; ∕∕ size 2 is an example here
+	int nbins_per_block = nbins ∕ cluster_size;
+	
+	// dynamic shared memory size is per block.
+	// Distributed shared memory size = cluster_size * nbins_per_block * sizeof(int)
+	config.dynamicSmemBytes = nbins_per_block * sizeof(int);
+	
+	CUDA_CHECK(::cudaFuncSetAttribute((void *)clusterHist_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, config.dynamicSmemBytes));
+	
+	cudaLaunchAttribute attribute[1];
+	attribute[0].id = cudaLaunchAttributeClusterDimension;
+	attribute[0].val.clusterDim.x = cluster_size;
+	attribute[0].val.clusterDim.y = 1;
+	attribute[0].val.clusterDim.z = 1;
+	
+	config.numAttrs = 1;
+	config.attrs = attribute;
+	
+	cudaLaunchKernelEx(&config, clusterHist_kernel, bins, nbins, nbins_per_block, input, array_size);
+}
+```
+
+### Page-Locked Host Memory
 
