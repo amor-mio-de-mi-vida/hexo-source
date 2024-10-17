@@ -3,9 +3,10 @@ title: The Pragmatic Programmer
 date: 2024-09-27 23:09:00
 tags:
   - book
-categories: book
+categories:
+  - book
 date created: 2024-09-27 23:09:00
-date modified: 2024-10-12 14:03:39
+date modified: 2024-10-17 12:39:01
 ---
 在《程序员修炼之道》一书中，Dave 和Andy将告诉我们怎样以一种我们能够遵循的方式编程。他们何以能这样聪明?他们不也是和其他序员一样，专注于各种细节而已吗?答案是他们在做某件事情时，会把注意力投注在他们在做的事情上——然后他们会试着把它做得更好。
 
