@@ -5,7 +5,7 @@ tags:
 categories:
   - NVIDIA cuda 编程指南
 date: 2024-10-16 09:23:28
-date modified: 2024-10-16 10:42:56
+date modified: 2024-10-18 12:34:11
 ---
 ## cuda 介绍
 GPU 特别适合于并行数据运算的问题－同一个程序在许多并行数据元素，并带有高运算密度（算术运算与内存操作的比例）。由于同一个程序要执行每个数据元素，降低了对复杂的流量控制要求; 并且，因为它执行许多数据元素并且据有高运算密度，内存访问的延迟可以被忽略。
@@ -100,7 +100,3 @@ CUDA 允许并行数据缓冲或者在On-chip 内存共享，可以进行快速�
 
 在一个线程块`grid`内的块次序是未定义的，并且在块之间不存在同步机制，因此来自同一个`grid`的二个不同块的线程不能通过全局内存彼此安全地通讯。
 
-
-
-
-{% pdf https://github.com/amor-mio-de-mi-vida/document/blob/main/cuda/NVIDIA_CUDA_Programming_Guide_1.1_chs.pdf width="857" height="700" %}

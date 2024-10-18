@@ -1,7 +1,7 @@
 ---
 date: 2024-10-17 15:10:25
-date modified: 2024-10-17 16:54:43
-title: Algorithms and Implementation
+date modified: 2024-10-18 10:25:12
+title: Optimization
 tags:
   - course
 categories:
