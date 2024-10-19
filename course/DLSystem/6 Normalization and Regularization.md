@@ -1,6 +1,6 @@
 ---
 date: 2024-10-18 16:24:36
-date modified: 2024-10-18 19:50:43
+date modified: 2024-10-19 14:23:37
 title: Normalization and Regularization
 tags:
   - course

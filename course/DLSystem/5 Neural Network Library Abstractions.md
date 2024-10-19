@@ -1,6 +1,6 @@
 ---
 date: 2024-10-18 10:24:02
-date modified: 2024-10-18 13:31:06
+date modified: 2024-10-19 14:54:54
 title: Neural Network Library Abstractions
 tags:
   - course
@@ -95,3 +95,47 @@ Two levels of abstractions
 - Computational graph abstraction on Tensors, handles AD.
 
 - High level abstraction to handle modular composition.
+
+
+The problem is that we are actively  building up a computational graph that tracks the history of all the past updates. Such un-necessary graph tracking can cause memory and speed issues.
+
+Instead, we can create a "detached" tensor that does not requires grad.
+
+### Numerical Stability
+
+most computations in deep learning model are executed using 32-bit floating point. We need to pay special attention to potential numerical problems. Softmax is one of the most commonly used operators in loss functions. Let $z=softmax(x)$, then we have 
+$$
+z_i=\frac{exp(x_i)}{\sum_kexp(x_k)}
+$$
+passing a large number (that is greater than 0) to exp function can easily result in overflow. Note that the following invariance hold for any constant $c$.
+
+$$
+z_i=\frac{exp(x_i)}{\sum_kexp(x_k)}=\frac{exp(x_i-c)}{\sum_kexp(x_k-c)}
+$$
+
+we can pick $c=max(x)$ so that all the inputs to the exp become smaller or equal to 0.
+
+### Designing a Neural Network Library
+
+![](https://github.com/amor-mio-de-mi-vida/picx-images-hosting/raw/master/dlsystem/image.2krwsepgn5.webp)
+
+### Initialization
+
+Under a linear relu network where $y^{(l)}=x^{(l-1)}W^T$, $x^{(l)}=max(y^{(l)},0)$. Assume that $W\in \mathbb{R}^{n_{out}\times n_{in}}$. A common way to do so is to initialize it as $\mathcal{N}(0,\sigma^2)$ where $\sigma=\sqrt{\frac{2}{n_{}in}}$.
+
+Checkout Explanation from the original paper: Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification
+
+$$\begin{align}
+&y_i=\overset{n_{in}}{\underset{j=1}{\sum}}x_jW_{i,j}\\
+&\mathbf{Var}[y_i]=n_{in}\mathbf{E}[x_0^2]\mathbf{Var}[W_{i,j}]=n_{in}\mathbf{E}[x_0^2]\sigma^2 
+\end{align}$$
+
+Considering the fact that x is also a result of relu of previous layer
+
+$$
+\mathbf{E}[x_0^2]=\mathbf{E}[relu(y^{(l-1)})^2]=\frac{1}{2}\mathbf{Var}[y^{(l-1)}]
+$$
+
+we can get the variance value by requiring $\mathbf{Var}[y^{(l-1)}]=\mathbf{Var}[y^{(l)}]$. NOTE: the variance value was derived under a specific deep relu network.
+
+
