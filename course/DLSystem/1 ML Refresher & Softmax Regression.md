@@ -5,7 +5,7 @@ tags:
 categories:
   - DLSystem
 date: 2024-10-06 15:50:07
-date modified: 2024-10-10 23:03:30
+date modified: 2024-10-21 09:15:59
 ---
 ## Three ingredients of a machine learning algorithm
 Every machine leaning algorithm consists of three different elements
@@ -34,7 +34,6 @@ $$f(\theta) = \underset{\theta}{minimize} \frac{1}{m}\underset{i=1}{\overset{m}{
 To minimize a function, the gradient descent algorithm proceeds by iteratively taking steps in the direction of the negative gradient
 $$\theta:=\theta-\alpha \nabla_{\theta}f(\theta) $$
 where $\alpha >0$ is a step or *learning rate*.
-![](images/Pasted%20image%2020241006164633.png)
 So, how do we compute the gradient for the softmax objective?
 $$\nabla_{\theta}l_{ce}(\theta^Tx, y)=\text{?}$$
 for vector $h \in \mathbb{R}^k$
