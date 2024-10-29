@@ -1,9 +1,11 @@
 ---
 date: 2024-10-28 10:05:59
-date modified: 2024-10-28 14:33:07
+date modified: 2024-10-28 14:50:32
 title: Implementing Convolutions
-tags: 
-categories: 
+tags:
+  - course
+categories:
+  - DLSystem
 date created: 2024-09-25 13:26:08
 ---
 ### Storage Order

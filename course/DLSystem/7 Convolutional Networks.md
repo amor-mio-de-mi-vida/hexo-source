@@ -1,12 +1,11 @@
 ---
 date: 2024-10-19 14:57:38
-date modified: 2024-10-19 16:18:34
-title: Welcome to use Hexo Theme Keep
+date modified: 2024-10-28 14:50:39
+title: Convolutional Networks
 tags:
-  - Hexo
-  - Keep
+  - course
 categories:
-  - Hexo
+  - DLSystem
 ---
 ## Convolutional operators in deep networks
 
