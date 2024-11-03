@@ -1,6 +1,6 @@
 ---
 date: 2024-10-29 15:06:13
-date modified: 2024-10-29 15:39:55
+date modified: 2024-11-03 16:23:20
 title: Welcome to use Hexo Theme Keep
 tags:
   - Hexo
@@ -8,7 +8,7 @@ tags:
 categories:
   - Hexo
 ---
-## Question 1 : Implementing forward computation
+## Question 2 : Implementing backward computation
 
 ### MatMul
 
@@ -21,8 +21,13 @@ $$\begin{align}
 &\frac{\partial (A @ B)}{\partial B} = A^T@\text{grad}(A@B) = A^T
 \end{align}$$
 
+and Note that <mark>unlike the forward pass functions, the arguments to the gradient function are needle objects.</mark>
 
-## Summation
+> It is important to implement the backward passes using only `needle` operations (i.e. those defined in `python/needle/ops/ops_mathematic.py`), rather than using `numpy` operations on the underlying `numpy` data, so that we can construct the gradients themselves via a computation graph (one excpetion is for the `ReLU` operation defined below, where you could directly access data within the Tensor without risk because the gradient itself is non-differentiable, but this is a special case).
+
+For Batch Matrix Multiplication, grads need to be accumulated
+
+### Summation
 
 we can view summation as matrix multiplication for example: 
 
@@ -63,5 +68,25 @@ a_{m0} & a_{m1} &\cdots& a_{mn} \\
 1
 \end{matrix}\right]
 =
-
+\left[
+\begin{matrix}
+\overset{n}{\underset{i_0=1}{\sum}}a_{0i_0}\\
+\overset{n}{\underset{i_1=1}{\sum}}a_{1i_1}\\
+\cdots\\
+\overset{n}{\underset{i_m=1}{\sum}}a_{mi_m}\\
+\end{matrix}
+\right]
 $$
+
+## Transpose
+
+
+
+
+### BroadcastTo
+
+
+
+
+### Reshape
+
