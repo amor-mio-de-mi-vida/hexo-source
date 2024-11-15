@@ -1,12 +1,11 @@
 ---
 date: 2024-11-03 21:29:41
 date modified: 2024-11-03 23:15:58
-title: Welcome to use Hexo Theme Keep
+title: Memory Hierarchies and Matrix Multiplication
 tags:
-  - Hexo
-  - Keep
+  - course
 categories:
-  - Hexo
+  - cs267
 ---
 ## Memory Hierarchies
 
