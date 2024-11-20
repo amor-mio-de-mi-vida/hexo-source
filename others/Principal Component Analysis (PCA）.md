@@ -1,6 +1,6 @@
 ---
 date: 2024-11-18 18:37:27
-date modified: 2024-11-18 20:24:19
+date modified: 2024-11-18 22:58:52
 title: Welcome to use Hexo Theme Keep
 tags:
   - PCA
@@ -149,4 +149,119 @@ Find closest labeled face in database (nearest-neighbor in K-dimensional space).
 
 ## Singular Value Decomposition SVD
 
-The eigenvectors of a matrix 
+The eigenvectors of a matrix $\mathbf{A}$ form a basis for working with $\mathbf{A}$. However, for rectangular matrix $\mathbf{A}(m\times n)$, $\text{dim}(\mathbf{A}x)\ne\text{dim}(x)$ and the concept of eigenvectors does not exist.
+
+Yet $\mathbf{A}^T\mathbf{A}(n\times n)$\footnote{here each row of $\mathbf{A}$ is a measurement in time and each column is a measurement type} is a symmetric, real matrix($\mathbf{A}$ is real) and therefore, there is an orthonormal basis of eigenvectors $\{u_k\}$ for $\mathbf{A}^T\mathbf{A}$.
+
+Consider the vectors $\{v_k\}$
+
+$$v_k=\frac{\mathbf{A}u_k}{\sqrt{\lambda_k}}$$
+
+They are also orthonormal, since:
+
+$$u_j^T\mathbf{A}^T\mathbf{A}u_k=\lambda_k\delta(k-j)$$
+
+Since $\mathbf{A}^T\mathbf{A}$ is positive semidefinite, its eigenvalues are non-negative $\{\lambda_k\ge 0\}$
+
+Define the singular values of $\mathbf{A}$ as
+
+$$\sigma_k=\sqrt{\lambda_k}$$
+
+and order them in a non-increasing order:
+
+$$\sigma_1\ge\sigma_2\ge\cdots\ge\sigma_n\ge 0$$
+
+Motivation: One can see, that if $\mathbf{A}$ itself is square and symmetric, then $\{u_k,\sigma_k\}$ are the set of its own eigenvectors and eigenvalues.
+
+For a general matrix $\mathbf{A}$, assume $\{\sigma_1 \ge \sigma_2 \ge \cdots \ge \sigma_R > 0=\sigma_{r+1}=\sigma_{r+2}=\cdots =\sigma_n\}$
+
+$$\mathbf{A}u_k=0\cdot v_k , \quad k=r+1,...,n, u_k\in \mathbb{R}^{n\times 1}, v_k\in\mathbb{R}^{m\times 1}$$
+
+Now we can write:
+
+$$\begin{align}
+
+&\left[\begin{matrix}
+
+|&&|&|&&|\\
+
+\mathbf{A}u_1&\cdots&\mathbf{A}u_r&\mathbf{A}u_{r+1}&\cdots&\mathbf{A}u_n\\
+
+|&&|&|&&|\\
+
+\end{matrix}\right]=\mathbf{A}
+
+\left[\begin{matrix}
+
+|&&|&|&&|\\
+
+u_1&\cdots&u_r&u_{r+1}&\cdots&u_n\\
+
+|&&|&|&&|\\
+
+\end{matrix}\right]\\
+
+&=\mathbf{AU}=\left[\begin{matrix}
+
+|&&|&|&&|\\
+
+\sigma_1v_1&\cdots&\sigma_rv_r&0\cdot v_{r+1}&\cdots&0\cdot v_n\\
+
+|&&|&|&&|\\
+
+\end{matrix}\right]\\
+
+&=\left[\begin{matrix}
+
+|&&|&|&&|\\
+
+v_1&\cdots&v_r&v_{r+1}&\cdots&v_n\\
+
+|&&|&|&&|\\
+
+\end{matrix}\right]
+
+\left[\begin{matrix}
+
+\sigma_1&\cdots&0&0&\cdots&0\\
+
+\vdots&\cdots&\vdots&\vdots&\cdots&\vdots\\
+
+0&\cdots&\sigma_r&0&\cdots&0\\
+
+0&\cdots&0&0&\cdots&0\\
+
+\vdots&\cdots&\vdots&\vdots&\cdots&\vdots\\
+
+0&\cdots&0&0&\cdots&0\\
+
+\end{matrix}\right]=\mathbf{V\Sigma}
+
+\end{align}$$
+
+$$AUU^T=V\Sigma U^T\Rightarrow A=V\Sigma U^T$$
+
+$$A\in\mathbb{R}^{m\times n},V\in\mathbb{R}^{m\times m},\Sigma\in\mathbb{R}^{m\times n},U\in\mathbb{R}^{n\times n}$$
+
+while $V$ and $U$ are both orthogonal matrix.
+
+> 正交矩阵的性质：
+> 
+> **定义** 设n阶矩阵$A$满足$AA^T=A^TA=I$, 则称A为正交矩阵
+> 
+> **定理1** 设$A,B$是同阶正交矩阵，则：
+> - $\det(A)=\pm1$
+> - $A^T$, $A^{-1}$, $A^{*}$ 均为正交矩阵
+> - $AB$为正交矩阵
+> 
+> **定理2** 实方阵$A$为正交矩阵$\iff A$的列/行向量组为标准正交向量组
+> 
+>**定理3** （正交变换的保范性）设$A$为正交矩阵, 则$\forall x_1,x_2\in\mathbb{R}^n$，有
+>- $<Ax_1, Ax_2>=<x_1,x_2>$;
+>- $||Ax_1||=||x_1||$
+>
+>**定理4** 设$A$为正交矩阵，则$A$的特征值只能为$\pm1$
+>
+>**定理5** 设$A$为n阶实对称矩阵，则**一定**存在n阶正交矩阵P使得
+>$$P^{-1}AP=\text{diag}(\lambda_1,\lambda_2,...,\lambda_n)$$
+
