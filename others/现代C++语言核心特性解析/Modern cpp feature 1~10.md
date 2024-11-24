@@ -1,6 +1,6 @@
 ---
 date: 2024-11-21 20:22:55
-date modified: 2024-11-23 20:42:15
+date modified: 2024-11-24 22:58:42
 title: Modern cpp feature 1~10
 tags:
   - cpp
@@ -18,6 +18,16 @@ Reference: 《现代C++语言核心特性解析》
 4. `decltype` 说明符
 
 5. 函数返回类型后置
+
+6. 右值引用
+
+7. lambda 表达式
+
+8. 非静态数据成员默认初始化
+
+9. 列表初始化
+
+10. 默认和删除函数
 
 <!--more-->
 
@@ -744,7 +754,7 @@ decltype(n);    // decltype(n) 推导类型为 int[10]
 decltype(foo);  // decltype(foo) 推导类型为 int const&& (void)
 
 struct A {
-	int operator() { return 0; }
+	int operator() () { return 0; }
 };
 
 A a;
@@ -1563,3 +1573,1134 @@ int main() {
 可以看到函数`f`不再有返回值，它通过`throw`抛出`x`，`main`函数用`try-catch`捕获`f`抛出的`x`。这个捕获调用的就是移动构造函数。
 
 # lambda 表达式
+
+## lambda 表达式语法
+
+lambda 表达式的语法定义如下：
+
+```cpp
+[ captures ] ( params ) specifiers exception -> ret { body }  
+```
+
+例子：
+
+```cpp
+#include <iostream>
+
+int main() {
+	int x = 5;
+	auto foo = [x](int y) -> int { return x * y; }
+	std::cout << foo(8) << std::endl;
+}
+```
+
+- `[captures]` 捕获列表，它可以捕获**当前函数作用域**的零个或多个变量，变量之间用逗号分隔。
+
+- `(params)` 可选参数列表，语法和普通函数的参数列表一样，在不需要参数的时候可以忽略参数列表。
+
+- `specifiers` 可选限定符，C++11中可以用mutable，它允许我们在lambda表达式函数体内改变按值捕获的变量，或者调用非const的成员函数。
+
+- `exception` 可选异常说明符，我们可以使用`noexcept`来指明`lambda`是否会抛出异常。对应的例子中没有使用异常说明符。
+
+- `ret` 可选返回值类型，不同于普通函数，`lambda`表达式使用返回类型后置的语法来表示返回类型，如果没有返回值（`void`类型），可以忽略包括`->`在内的整个部分。另外，我们也可以在有返回值的情况下不指定返回类型，这时编译器会为我们推导出一个返回类型。
+
+- `{body}` ambda表达式的函数体，这个部分和普通函数的函数体一样。
+
+## 捕获列表
+
+### 作用域
+
+捕获列表中的变量存在于两个作用域——**lambda表达式定义的函数作用域以及lambda表达式函数体的作用域。** 前者是为了捕获变量，后者是为了使用变量。另外，标准还规定能捕获的变量必须是一个自动存储类型。简单来说就是非静态的局部变量。让我们看一看下面的例子：
+
+```cpp
+int x = 0;
+
+int main() {
+	int y = 0;
+	static int z = 0;
+	auto foo = [x, y, z] {};
+}
+```
+
+ 以上代码可能是无法通过编译的，其原因有两点：第一，变量x和z不是自动存储类型的变量；第二，x不存在于lambda表达式定义的作用域。这里可能无法编译，因为不同编译器对于这段代码的处理会有所不同，比如GCC就不会报错，而是给出警告。
+
+```cpp
+#include <iostream>
+
+int x = 1;
+int main() {
+	int y = 2;
+	static int z = 3;
+	auto foo = [y] { return x + y + z; };
+	std::cout << foo() << std::endl;
+}
+```
+
+在上面的代码中，虽然我们没有捕获变量x和z，但是依然可以使用它们。进一步来说，如果我们将一个lambda表达式定义在全局作用域，那么lambda表达式的捕获列表必须为空。因为根据上面提到的规则，捕获列表的变量必须是一个自动存储类型，但是全局作用域并没有这样的类型，比如：
+
+```cpp
+int x = 1;
+auto foo = [] { return x; };
+int main() {
+	foo();
+}
+```
+
+### 捕获值和捕获引用
+
+捕获值的语法是在`[]`中直接写入变量名，如果有多个变量，则用逗号分隔，例如：
+
+```cpp
+int main() {
+	int x = 5, y = 8;
+	auto foo = [x, y] { return x * y; }
+}
+```
+
+捕获值是将函数作用域的x和y的值复制到lambda表达式对象的内部，就如同lambda表达式的成员变量一样。
+
+捕获引用的语法与捕获值只有一个&的区别，要表达捕获引用我们只需要在捕获变量之前加上&，类似于取变量指针。只不过这里捕获的是引用而不是指针，在lambda表达式内可以直接使用变量名访问变量而不需解引用，比如：
+
+```cpp
+int main() {
+	int x = 5, y = 8;
+	auto foo = [&x, &y] { return x * y; };
+}
+```
+
+```cpp
+void bar1() {
+	int x = 5, y = 8;
+	auto foo = [x, y] {
+		x += 1;         // 编译失败，无法改变捕获变量的值
+		y += 2;         // 编译失败，无法改变捕获变量的值
+		return x * y;	
+	};
+	std::cout << foo() << std::endl;
+}
+
+void bar2() {
+	int x = 5, y = 8;
+	auto foo = [&x, &y] {
+		x += 1;
+		y += 2;
+		return x * y;
+	};
+	std::cout << foo() << std::endl;
+}
+``` 
+
+在上面的代码中函数bar1无法通过编译，原因是我们无法改变捕获变量的值。这就引出了lambda表达式的一个特性：**捕获的变量默认为常量，或者说lambda是一个常量函数（类似于常量成员函数）。**
+
+**使用`mutable`说明符可以移除lambda表达式的常量性，也就是说我们可以在lambda表达式的函数体中修改捕获值的变量了**，例如：
+
+```cpp
+void bar3() {
+	int x = 5, y = 8;
+	auto foo = [x, y] () mutable {
+		x += 1;
+		y += 2;
+		return x * y;
+	};
+	std::cout << foo() << std::endl;
+}
+```
+
+**语法规定lambda表达式如果存在说明符，那么形参列表不能省略。**
+
+当lambda表达式捕获值时，表达式内实际获得的是捕获变量的复制，我们可以任意地修改内部捕获变量，但不会影响外部变量。而捕获引用则不同，在lambda表达式内修改捕获引用的变量，对应的外部变量也会被修改：
+
+```cpp
+#include <iostream>
+
+int main() {
+	int x = 5, y = 8;
+	auto foo = [x, &y] () mutable {
+		x += 1;
+		y += 2;
+		std::cout << "lambda x = " << x << ", y = " << y << std::endl;
+		return x * y;
+	};
+	foo();
+	std::cout << "call1 x = " << x << ", y = " << y << std::endl;
+	foo();
+	std::cout << "call2 x = " << x << ", y = " << y << std::endl;
+}
+```
+
+运行结果如下：
+
+```cpp
+lambda x = 6, y = 10
+call1 x = 5, y = 10
+lambda x = 7, y = 12
+call2 x = 5, y = 12
+```
+
+捕获值的变量在lambda表达式定义的时候已经固定下来了，无论函数在lambda表达式定义后如何修改外部变量的值，lambda表达式捕获的值都不会变化，例如：
+
+```cpp
+#include <iostream>
+
+int main() {
+	int x = 5, y = 8l
+	auto foo = [x, &y] () mutable {
+		x += 1;
+		y += 2;
+		std::cout << "lambda x = " << x << ", y = " << y << std::endl;
+		return x * y;
+	};
+	x = 9;
+	y = 20;
+	foo();
+}
+```
+
+运行结果如下：
+
+```cpp
+lambda x = 6, y = 22
+```
+
+在上面的代码中，虽然在调用foo之前分别修改了x和y的值，但是捕获值的变量x依然延续着lambda定义时的值，而在捕获引用的变量y被重新赋值以后，lambda表达式捕获的变量y的值也跟着发生了变化。
+
+### 特殊的捕获方法
+
+lambda表达式的捕获列表除了指定捕获变量之外还有3种特殊的捕获方法。
+
+- `[this]` —— 捕获`this`指针，捕获`this`指针可以让我们使用`this`类型的成员变量和函数。
+
+- `[=]` —— 捕获lambda表达式定义作用域的全部变量的值，包括`this`。
+
+- `[&]` —— 捕获lambda表达式定义作用域的全部变量的引用，包括`this`。
+
+捕获 `this` 指针
+
+```cpp
+#include <iostream>
+
+class A {
+public:
+	void print() {
+		std::cout << "class A" << std::endl;
+	}
+	void test() {
+		auto foo = [this] {
+			print();
+			x = 5;
+		};
+		foo();
+	}
+private:
+	int x;
+};
+
+int main() {
+	A a;
+	a.test();
+}
+```
+
+在上面的代码中，因为`lambda`表达式捕获了`this`指针，所以可以在`lambda`表达式内调用该类型的成员函数`print`或者使用其成员变量`x`。
+
+捕获全部变量的值或引用：
+
+```cpp
+#include <iostream>
+
+int main() {
+	int x = 5, y = 8;
+	auto foo = [=] { return x * y; };
+	std::cout << foo() << std::endl;
+}
+```
+
+## lambda 表达式的实现原理
+
+让我们从函数对象开始深入探讨`lambda`表达式的实现原理。请看下面的例子：
+
+```cpp
+#include <iostream>
+
+class Bar {
+public:
+	Bar (int x, int y) : x_(x), y_(y) {}
+	int operator () (){
+		return x_ * y_
+	}
+private:
+	int x_;
+	int y_;
+};
+
+int main() {
+	int x = 5, y = 8;
+	auto foo = [x, y] { return x * y; };
+	Bar bar(x, y);
+	std::cout << "foo() = " << foo() << std::endl;
+	std::cout << "bar() = " << bar() << std::endl;
+}
+```
+
+在上面的代码中，foo是一个lambda表达式，而bar是一个函数对象。它们都能在初始化的时候获取main函数中变量x和y的值，并在调用之后返回相同的结果。这两者比较明显的区别如下。
+
+- 使用lambda表达式不需要我们去显式定义一个类，这一点在快速实现功能上有较大的优势。
+
+- 使用函数对象可以在初始化的时候有更加丰富的操作，例如`Bar bar(x+y, x * y)`，而这个操作在C++11标准的`lambda`表达式中是不允许的。另外，在`Bar`初始化对象的时候使用全局或者静态局部变量也是没有问题的。
+
+**`lambda`表达式的优势在于书写简单方便且易于维护，而函数对象的优势在于使用更加灵活不受限制。**
+
+`lambda`表达式在编译期会由编译器自动生成一个闭包类，在运行时由这个闭包类产生一个对象，我们称它为闭包。在C++中，所谓的闭包可以简单地理解为一个匿名且可以包含定义时作用域上下文的函数对象。
+
+首先，定义一个简单的lambda表达式：
+
+```cpp
+#include <iostream>
+
+int main() {
+	int x = 5, y = 8;
+	auto foo = [=] { return x * y; };
+	int z = foo();
+}
+```
+
+接着，我们用GCC输出其GIMPLE的中间代码：
+
+```txt
+main() {
+	int D.39253;
+	{
+		int x;
+		int y;
+		struct __lambda0 foo;
+		typedef struct __lambda0 __lambda0;
+		int x;
+		try {
+			x = 5;
+			y = 8;
+			foo.__x = x;
+			foo.__y = y;
+			z = main()::<lambda()>::operator() (&foo);
+		}
+		finally {
+			foo = {CLOBBER};
+		}
+	}
+	D.39253 = 0;
+	return D.39253;
+}
+
+main::<lambda()>::operator() (const struct __lambda0 * const __closure) {
+	int D.39255;
+	const int x [value-expr: __closure->__x];
+	const int y [value->expr: __closure->__y];
+	
+	_1 = __closure->__x;
+	_2 = __closure->__y;
+	D.39255 = _1 * _2;
+	return D.39255;
+}
+```
+
+在某种程度上来说，lambda表达式是C++11给我们提供的一块语法糖而已，lambda表达式的功能完全能够手动实现，而且如果实现合理，代码在运行效率上也不会有差距，只不过实用lambda表达式让代码编写更加轻松。
+
+## 无状态 lambda 表达式
+
+C++标准对于无状态的lambda表达式有着特殊的照顾，即它可以隐式转换为函数指针，例如：
+
+```cpp
+void f(void(*)()) {}
+void g() { f([] {}); } // 编译成功
+```
+
+在上面的代码中，lambda表达式`[] {}`隐式转换为`void(*)()`类型的函数指针。同样，看下面的代码：
+
+```cpp
+void f(void(&)()) {}
+void g() { f(*[] ()); }
+```
+
+这段代码也可以顺利地通过编译。我们经常会在STL的代码中遇到 `lambda` 表达式的这种应用。
+
+## 在 STL 中使用 lambda 表达式
+
+
+在有了lambda表达式以后，我们可以直接在STL算法函数的参数列表内实现辅助函数，例如：
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+	std::vector<int> x = {1, 2, 3, 4, 5};
+	std::cout << *std::find_if(x.cbegin(), x.cend(), [] (int i) { return (i % 3) == 0}) << std::endl;
+```
+
+## 广义捕获
+
+所谓广义捕获实际上是两种捕获方式，第一种称为简单捕获，这种捕获就是我们在前文中提到的捕获方法，即`[identifier]`、`[&identifier]`以及`[this]`等。第二种叫作初始化捕获，这种捕获方式是在C++14标准中引入的，它解决了简单捕获的一个重要问题，**即只能捕获lambda表达式定义上下文的变量，而无法捕获表达式结果以及自定义捕获变量名**，比如：
+
+```cpp
+int main() {
+	int x = 5;
+	auto foo = [x = x + 1] { return x; };
+}
+```
+
+以上在C++14标准之前是无法编译通过的，因为C++11标准只支持简单捕获。而C++14标准对这样的捕获进行了支持，在这段代码里捕获列表是一个赋值表达式，不过这个赋值表达式有点特殊，因为它通过等号跨越了两个作用域。等号左边的变量x存在于lambda表达式的作用域，而等号右边x存在于main函数的作用域。
+
+```cpp
+int main() {
+	int x = 5;
+	auto foo = [r = x + 1] { return r; };
+}
+```
+
+初始化捕获在某些场景下是非常实用的，这里举两个例子，**第一个场景是使用移动操作减少代码运行的开销**，例如：
+
+```cpp
+#include <string>
+
+int main() {
+	std::string x = "hello c++ ";
+	auto foo = [x = std::move(x)] { return x + "world"; };
+}
+```
+
+上面这段代码使用std::move对捕获列表变量x进行初始化，这样避免了简单捕获的复制对象操作，代码运行效率得到了提升。
+
+第二个场景是在异步调用时复制this对象，防止lambda表达式被调用时因原始this对象被析构造成未定义的行为，比如：
+
+```cpp
+#include <iostream>
+#include <future>
+
+class Work {
+private:
+	int value;
+public:
+	Work() : value(42) {}
+	std::future<int> spawn() {
+		return std::async([=]() -> int { return value; });
+	}
+};
+
+std::future<int> foo() {
+	Work tmp;
+	return tmp.spawn();
+}
+
+int main() {
+	std::future<int> f = foo();
+	f.wait();
+	std::cout << "f.get() = " << f.get() << std::endl;
+}
+```
+
+输出结果如下：
+
+```txt
+f.get() = 32766
+```
+
+这里我们期待f.get()返回的结果是42，而实际上返回了32766，这就是一个未定义的行为，它造成了程序的计算错误，甚至有可能让程序崩溃。为了解决这个问题，我们引入初始化捕获的特性，将对象复制到lambda表达式内，让我们简单修改一下spawn函数：
+
+```cpp
+class Work {
+private:
+	int value;
+public:
+	Work() : value(42) {}
+	std::future<int> spawn() {
+		return std::async([=, tmp=*this]() -> int { return tmp.value; });
+	}
+};
+```
+
+以上代码使用初始化捕获，将`*this`复制到`tmp`对象中，然后在函数体内返回`tmp`对象的`value`。由于整个对象通过复制的方式传递到`lambda`表达式内，因此即使`this`所指的对象析构了也不会影响`lambda`表达式的计算。编译运行修改后的代码，程序正确地输出`f.get() =42`。
+
+## 泛型 lambda 表达式
+
+C++14标准让`lambda`表达式具备了模版函数的能力，我们称它为泛型`lambda`表达式。虽然具备模版函数的能力，但是它的定义方式却用不到`template`关键字。实际上泛型`lambda`表达式语法要简单很多，我们只需要使用`auto`占位符即可，例如：
+
+```cpp
+int main() {
+	auto foo = [](auto a) { return a; };
+	int three = foo(3);
+	char const* hello = foo("hello");
+}
+```
+
+## 常量 `lambda` 表达式和捕获 `*this`
+
+C++17标准对`lambda`表达式同样有两处增强，一处是常量`lambda`表达式，另一处是对捕获`*this`的增强。其中常量`lambda`表达式的主要特性体现在`constexpr`关键字上，请阅读`constexpr`的有关章节来掌握常量`lambda`表达式的特性，这里主要说明一下对于捕获`this`的增强。
+
+```cpp
+class Work {
+private:
+	int value;
+public:
+	Work() : value(42) {}
+	std::future<int> spawn() {
+		return std::async([=, *this]() -> int { return value; });
+	}
+};
+```
+
+在上面的代码中没有再使用`tmp=*this`来初始化捕获列表，而是直接使用`*this`。在`lambda`表达式内也没有再使用`tmp.value`而是直接返回了`value`。编译运行这段代码可以得到预期的结果42。从结果可以看出，`[*this]`的语法让程序生成了一个`*this`对象的副本并存储在 `lambda` 表达式内，可以在`lambda`表达式内直接访问这个复制对象的成员，消除了之前`lambda`表达式需要通过`tmp`访问对象成员的尴尬。
+
+## 捕获 `[=, this]`
+
+在C++20标准中，又对`lambda`表达式进行了小幅修改。这一次修改没有加强`lambda`表达式的能力，而是让`this`指针的相关语义更加明确。我们知道`[=]`可以捕获`this`指针，相似的，`[=,*this]`会捕获`this`对象的副本。但是在代码中大量出现`[=]`和`[=,*this]`的时候我们可能很容易忘记前者与后者的区别。为了解决这个问题，在C++20标准中引入了`[=, this]`捕获this指针的语法，它实际上表达的意思和`[=]`相同，目的是让程序员们区分它与`[=,*this]`的不同：
+
+```cpp
+[=, this]{}; // c++17 编译报错或者报警告，c++20成功编译
+```
+
+虽然在C++17标准中认为`[=, this]{};`是有语法问题的，但是实践中GCC和CLang都只是给出了警告而并未报错。另外，在C++20标准中还特别强调了要用`[=, this]`代替`[=]`，如果用GCC编译下面这段代码：
+
+```cpp
+template <class T>
+void g(T) {}
+
+struct Foo {
+	int n = 0;
+	void f(int a) {
+		g([=](int k) { return n + a * k; });
+	}
+};
+```
+
+编译器会输出警告信息，表示标准已经不再支持使用`[=]`隐式捕获`this`指针了，提示用户显式添加`this`或者`*this`。最后值得注意的是，同时用两种语法捕获`this`指针是不允许的，比如：
+
+```cpp
+[this, *this]{};
+```
+
+## 模版语法的泛型 lambda 表达式
+
+我们讨论了C++14标准中`lambda`表达式通过支持`auto`来实现泛型。大部分情况下，这是一种不错的特性，但不幸的是，这种语法也会使我们难以与类型进行互动，对类型的操作变得异常复杂。用提案文档的举例来说：
+
+```cpp
+template <typename T> struct is_std_vector : std::false_type { };
+template <typename T> struct is_std_vector<std::vector<T>> : std::true_type { };
+auto f = [](auto vector) {
+	static_assert(is_std_vector<decltype(vector)>::value, "");
+};
+```
+
+普通的函数模板可以轻松地通过形参模式匹配一个实参为vector的容器对象，但是对于lambda表达式，auto不具备这种表达能力，所以不得不实现is_std_vector，并且通过static_assert来辅助判断实参的真实类型是否为vector。在C++委员会的专家看来，把一个本可以通过模板推导完成的任务交给static_assert来完成是不合适的。除此之外，这样的语法让获取vector存储对象的类型也变得十分复杂，比如：
+
+```cpp
+auto f = [](auto vector) {
+	using T = typename decltype(vector)::value_type;
+	// ...
+};
+```
+
+当然，能这样实现已经是很侥幸了。我们知道vector容器类型会使用内嵌类型value_type表示存储对象的类型。但我们并不能保证面对的所有容器都会实现这一规则，所以依赖内嵌类型是不可靠的。
+
+进一步来说，`decltype(obj)`有时候并不能直接获取我们想要的类型。
+
+```cpp
+auto f = [](const auto& x) {
+	using T = decltype(x);
+	T copy = x; // 可以编译，但是语义错误
+	using Iterator = typename T::iterator: // 编译错误
+};
+std::vector<int> v;
+f(v);
+```
+
+请注意，在上面的代码中，`decltype(x)`推导出来的类型并不是`std::vector` ，而是`const std::vector &`，所以`T copy = x;`不是一个复制而是引用。对于一个引用类型来说，`T::iterator`也是不符合语法的，所以编译出错。在提案文档中，作者很友好地给出了一个解决方案，他使用了STL的`decay`，这样就可以将类型的cv以及引用属性删除，于是就有了以下代码：
+
+```cpp
+auto f = [](const auto& x) {
+	using T = std::decay_t<decltype(x)>;
+	T copy = x;
+	using Iterator = typename T::iterator;
+};
+```
+
+问题虽然解决了，但是要时刻注意auto，以免给代码带来意想不到的问题，况且这都是建立在容器本身设计得比较完善的情况下才能继续下去的。
+
+鉴于以上种种问题，C++委员会决定在C++20中添加模板对lambda的支持，语法非常简单：
+
+```cpp
+[]<typename T>(T t) {}
+```
+
+于是，上面那些让我们为难的例子就可以改写为：
+
+```cpp
+auto f = []<typename T>(std::vector<T> vector) {
+	// ...
+};
+
+auto f = []<typename T>（T const& x) {
+	T copy = x;
+	using Iterator = typename T::iterator;
+};
+```
+
+## 可构造和可赋值的无状态 lambda 表达式
+
+无状态lambda表达式可以转换为函数指针，但遗憾的是，在C++20标准之前无状态的lambda表达式类型既不能构造也无法赋值，这阻碍了许多应用的实现。举例来说，我们已经了解了像std::sort和std::find_if这样的函数需要一个函数对象或函数指针来辅助排序和查找，这种情况我们可以使用lambda表达式完成任务。但是如果遇到std::map这种容器类型就不好办了，因为std::map的比较函数对象是通过模板参数确定的，这个时候我们需要的是一个类型：
+
+```cpp
+auto greater = [](auto x, auto y) { return x > y; };
+std::map<std::string, int, decltype(greater)> mymap;
+```
+
+这段代码的意图很明显，它首先定义了一个无状态的`lambda`表达式`greater`，然后使用`decltype(greater)`获取其类型作为模板实参传入模板。这个想法非常好，但是在C++17标准中是不可行的，因为`lambda`表达式类型无法构造。编译器会明确告知，`lambda`表达式的默认构造函数已经被删除了。
+
+除了无法构造，无状态的lambda表达式也没办法赋值，比如：
+
+```cpp
+auto greater = [](auto x, auto y) { return x > y; };
+std::map<std::string, int, decltype(greater)> mymap1, mymap2;
+mymap1 = mymap2;
+```
+
+这里mymap1 = mymap2;也会被编译器报错，原因是复制赋值函数也被删除了。为了解决以上问题，C++20标准允许了无状态lambda表达式类型的构造和赋值，所以使用C++20标准的编译环境来编译上面的代码是可行的。
+
+# 非静态数据成员默认初始化
+
+## 使用默认初始化
+
+在C++11以前，对非静态数据成员初始化需要用到初始化列表，当类的数据成员和构造函数较多时，编写构造函数会是一个令人头痛的问题：
+
+```cpp
+class X {
+public:
+	X() : a_(0), b_(0.), c_("hello world") {}
+	X(int a) : a_(a), b_(0.), c_("hello world") {}
+	X(double b) : a_(0), b_(b), c_("hello world") {}
+	X(const std::string &c) : a_(0), b_(0.), c_(c) {}
+
+private:
+	int a_;
+	double b_;
+	std::string c_;
+};
+```
+
+C++11标准提出了新的初始化方法，即在声明非静态数据成员的同时直接对其使用`=`或者`{}`初始化。在此之前只有类型为整型或者枚举类型的常量静态数据成员才有这种声明默认初始化的待遇：
+
+```cpp
+class X {
+public:
+	X() {}
+	X(int a) : a_(a) {}
+	X(double b) : b_(b) {}
+	X(const std::string &c) : c_(c) {}
+private:
+	int a_ = 0;
+	double b_{ 0. };
+	std::string c_{ "hello world" };
+};
+```
+
+在初始化的优先级上有这样的规则，初始化列表对数据成员的初始化总是优先于声明时默认初始化。
+
+最后来看一看非静态数据成员在声明时默认初始化需要注意的两个问题。
+
+- 不要使用括号()对非静态数据成员进行初始化，因为这样会造成解析问题，所以会编译错误。
+
+- 不要用auto来声明和初始化非静态数据成员，虽然这一点看起来合理，但是C++并不允许这么做。
+
+```cpp
+struct X {
+	int a(5);   // 编译错误，不能使用()进行默认初始化
+	auto b = 8; // 编译错误，不能使用 auto 声明和初始化非静态数据成员	
+};
+```
+
+## 位域的默认初始化
+
+在C++11标准提出非静态数据成员默认初始化方法之后，C++20标准又对该特性做了进一步扩充。在C++20中我们可以对数据成员的位域进行默认初始化了，例如：
+
+```cpp
+struct S {
+	int y : 8 = 11;
+	int z : 4 {7};
+};
+```
+
+在上面的代码中，int数据的低8位被初始化为11，紧跟它的高4位被初始化为7。
+
+位域的默认初始化语法很简单，但是也有一个需要注意的地方。当表示位域的常量表达式是一个条件表达式时我们就需要警惕了，例如：
+
+```cpp
+int a;
+struct S2 {
+	int y : true ? 8 : a = 42;
+	int z : 1 || new int { 0 };
+};
+```
+
+请注意，这段代码中并不存在默认初始化，因为最大化识别标识符的解析规则让`=42`和`{0}`不可能存在于解析的顶层。于是以上代码会被认为是：
+
+```cpp
+int a;
+struct S2 {
+	int y : (true ? 8 : a = 42);
+	int z : (1 || new int { 0 });
+};
+```
+
+所以我们可以通过使用括号明确代码被解析的优先级来解决这个问题：
+
+```cpp
+int a;
+struct S2 {
+	int y : (true ? 8 : a) = 42;
+	int z : (1 || new int) { 0 };
+};
+```
+
+通过以上方法就可以对`S2::y`和`S2::z`进行默认初始化了。
+
+# 列表初始化
+
+## 回顾变量初始化
+
+在介绍列表初始化之前，让我们先回顾一下初始化变量的传统方法。其中常见的是使用括号和等号在变量声明时对其初始化，例如：
+
+```cpp
+struct C {
+	C(int a) {}
+};
+
+int main() {
+	int x = 5;
+	int x1(8);
+	C x2 = 4;
+	C x3(4);
+}
+```
+
+一般来说，我们称使用括号初始化的方式叫作直接初始化，而使用等号初始化的方式叫作拷贝初始化（复制初始化）。请注意，这里使用等号对变量初始化并不是调用等号运算符的赋值操作。实际情况是，等号是拷贝初始化，调用的依然是直接初始化对应的构造函数，只不过这里是隐式调用而已。如果我们将`C(int a)`声明为`explicit`，那么`C x2 = 4`就会编译失败。
+
+**使用括号和等号只是直接初始化和拷贝初始化的代表**，还有一些经常用到的初始化方式也属于它们。**比如new运算符和类构造函数的初始化列表就属于直接初始化，而函数传参和return返回则是拷贝初始化。** 前者比较好理解，后者可以通过具体的例子来理解：
+
+```cpp
+#include <map>
+struct C {
+	C(int a) {}
+};
+
+void foo(C c) {} 
+C bar() {
+	return 5;
+}
+
+int main() {
+	foo(8);     // 拷贝初始化
+	C c = bar(); // 拷贝初始化
+}
+```
+
+## 使用列表初始化
+
+C++11标准引入了列表初始化，它使用大括号{}对变量进行初始化，和传统变量初始化的规则一样，它也区分为直接初始化和拷贝初始化，例如：
+
+```cpp
+#include <string>
+
+struct C {
+	C(std::string a, int b) {}
+	C(int a) {}
+};
+
+void foo(C) {}
+C bar() {
+	return { "world", 5 };
+}
+
+int main() {
+	int x = {5};        // 拷贝初始化
+	int x1{8};          // 直接初始化
+	C x2 = {4};         // 拷贝初始化
+	C x3{2};            // 直接初始化
+	foo({8});           // 拷贝初始化
+	foo({"hello", 8});  // 拷贝初始化
+	C x4 = bar();       // 拷贝初始化
+	C *x5 = new C{ "hi", 42}  // 直接初始化
+}
+```
+
+**有时候我们并不希望编译器进行隐式构造，这时候只需要在特定构造函数上声明explicit即可。**
+
+讨论使用大括号初始化变量就不得不提用大括号初始化数组，例如`int x[] = { 1,2,3,4,5 }`。不过遗憾的是，这个特性无法使用到STL的`vector`、`list`等容器中。想要初始化容器，我们不得不编写一个循环来完成初始化工作。现在，列表初始化将程序员从这个问题中解放了出来，我们可以使用列表初始化对标准容器进行初始化了，例如：
+
+```cpp
+#include <vector>
+#include <list>
+#include <set>
+#include <map>
+#include <string>
+
+int main() {
+	int x[] = { 1, 2, 3, 4, 5 };
+	int x1[]{ 1, 2, 3, 4, 5 };
+	std::vector<int> x2{ 1, 2, 3, 4, 5 };
+	std::vector<int> x3 = { 1, 2, 3, 4, 5 };
+	std::list<int> x4{ 1, 2, 3, 4, 5 };
+	std::list<int> x5 = { 1, 2, 3, 4, 5 };
+	std::set<int> x6{ 1, 2, 3, 4, 5 };
+	std::set<int> x7 = { 1, 2, 3, 4, 5 };
+	std::map<std::string, int> x8{ {"bear", 4}, {"cassowary", 2}, {"tiger", 7}};
+	std::map<std::string, int> x9 = { {"bear", 4}, {"cassowary", 2}, {"tiger", 7}};
+}
+```
+
+## `std::initializer_list`详解
+
+标准容器之所以能够支持列表初始化，离不开编译器支持的同时，它们自己也必须满足一个条件：**支持`std::initializer_list`为形参的构造函数**。`std::initializer_list`简单地说就是一个支持`begin`、`end`以及`size`成员函数的类模板，有兴趣的读者可以翻阅STL的源代码，然后会发现无论是它的结构还是函数都直截了当。编译器负责将列表里的元素（大括号包含的内容）构造为一个`std::initializer_list` 的对象，然后寻找标准容器中支持`std:: initializer_list`为形参的构造函数并调用它。而标准容器的构造函数的处理就更加简单了，它们只需要调用`std::initializer_list`对象的`begin`和`end`函数，在循环中对本对象进行初始化。
+
+
+通过了解原理能够发现，支持列表初始化并不是标准容器的专利，我们也能写出一个支持列表初始化的类，需要做的只是添加一个以`std::initializer_list`为形参的构造函数罢了，比如下面的例子：
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct C {
+	C(std::initializer_list<std::string> a) {
+		for (const std::string* item = a.begin(); item != a.end(); item++) {
+			std::cout << *item << " ";
+		}
+		std::cout << std::endl;
+	}
+};
+
+int main() {
+	C c{ "hello", "c++", "world" };
+}
+```
+
+上面这段代码实现了一个支持列表初始化的类 `C`，类 `C` 的构造函数为`C(std:: initializer_list<std::string> a)`，这是支持列表初始化所必需的，值得注意的是，`std::initializer_list`的`begin`和`end`函数并不是返回的迭代器对象，而是一个常量对象指针`const T *`。本着刨根问底的精神，让我们进一步探究编译器对列表的初始化处理：
+
+```cpp
+#include <iostream>
+#include <string>
+
+struct C {
+	C(std::initializer_list<std::string> a) {
+		for (const std::string* item = a.begin(); item != a.end(); item++) {
+			std::cout << item << " ";
+		}
+		std::cout << std::endl;
+	}
+};
+
+int main() {
+	C c{ "hello", "c++", "world" };
+	std::cout << "sizeof(std::string) = " << std::hex << sizeof(std::string) << std::endl;
+}
+```
+
+运行输出结果如下：
+
+```txt
+0x77fdd0 0x77fdf0 0x77fe10
+sizeof(std::string) = 20
+```
+
+以上代码输出了`std::string`对象的内存地址以及单个对象的大小（不同编译环境的`std::string`实现方式会有所区别，其对象大小也会不同，这里的例子是使用GCC编译的，`std::string`对象的大小为0x20）。仔细观察3个内存地址会发现，它们的差别正好是`std::string`所占的内存大小。于是我们能推断出，编译器所进行的工作大概是这样的：
+
+```cpp
+const std::string __a[3] = {std::string{"hello"}, std::string{"c++"}, std::string{"world"}};
+C c(std::initializer_list<std::string>(__a, __a + 3));
+```
+
+另外，有兴趣的读者不妨用GCC对上面这段代码生成中间代码GIMPLE，不出意外会发现类似这样的中间代码：
+
+```cpp
+main() {
+	struct initializer_list D.40094;
+	const struct basic_string D.36430[3];
+	...
+	std::__cxx11::basic_string<char>::basic_string (&D.36430[0], "hello", &D.36424);
+	...
+	std::__cxx11::basic_string<char>::basic_string (&D.36430[1], "c++", &D.36426);
+	...
+	std::__cxx11::basic_string<char>::basic_string (&D.36430[2], "world", &D.36428);
+	...
+	D.40094._M_array = &D.36430;
+	D.40094._M_len = 3;
+	C::C (&c, D.40094);
+	...
+}
+```
+
+## 使用列表初始化的注意事项
+
+### 隐式缩窄转换问题
+
+隐式缩窄转换是在编写代码中稍不留意就会出现的，而且它的出现并不一定会引发错误，甚至有可能连警告都没有，所以有时候容易被人们忽略，比如：
+
+```cpp
+int x = 12345;
+char y = x;
+```
+
+这段代码中变量y的初始化明显是一个隐式缩窄转换，这在传统变量初始化中是没有问题的，代码能顺利通过编译。但是如果采用列表初始化，比如`char z{ x }`，根据标准编译器通常会给出一个错误，MSVC和CLang就是这么做的，而GCC有些不同，它只是给出了警告。
+
+现在问题来了，在C++中哪些属于隐式缩窄转换呢？在C++标准里列出了这么4条规则。
+
+- 从浮点类型转换整数类型。
+
+- 从`long double`转换到`double`或`float`，或从`double`转换到`float`，除非转换源是常量表达式以及转换后的实际值在目标可以表示的值范围内。
+
+- 从整数类型或非强枚举类型转换到浮点类型，除非转换源是常量表达式，转换后的实际值适合目标类型并且能够将生成目标类型的目标值转换回原始类型的原始值。
+
+- 从整数类型或非强枚举类型转换到不能代表所有原始类型值的整数类型，除非源是一个常量表达式，其值在转换之后能够适合目标类型。
+
+```cpp
+int x = 999;
+const int y = 999;
+const int z = 99;
+const double cdb = 99.9;
+double db = 99.9;
+char c1 = x;  // 编译成功，传统变量初始化支持隐式缩窄转换
+char c2{ x }; // 编译失败，可能是隐式缩窄转换，对应规则4
+char c3{ y }; // 编译失败，确定是隐式缩窄转换，999超出char能够适应的范围，对应规则4
+char c4{ z }; // 编译成功，99在char能够适应的范围内，对应规则4
+unsigned char uc1 = { 5 }; // 编译成功，5在unsigned char能够适应的范围内，对应规则4
+unsigned char uc2 = { -1 }; // 编译失败，unsigned char不能够适应负数，对应规则4
+unsigned int uil = { -1 }; // 编译失败，signed int不能够适应-1所对应的unsigned int，通常是4294967295，对应规则4
+int ii = { 2.0 }; // 编译失败，int不能适应浮点范围，对应规则1
+float f1{ x }; // 编译失败，float可能无法适应整数或者互相转换，对应规则3
+float f2{ 7 }; // 编译成功，7能够适应float，且float也能转换回整数7，对应规则3
+float f3{ cdb }; // 编译成功，99.9能适应float，对应规则2
+float f4{ db }; // 编译失败，可能是隐式缩窄转无法表达double，对应规则2
+```
+
+### 列表初始化的优先级问题
+
+列表初始化既可以支持普通的构造函数，也能够支持以`std::initializer_list`为形参的构造函数。如果这两种构造函数同时出现在同一个类里，那么编译器会如何选择构造函数呢？比如：
+
+```cpp
+std::vector<int> x1(5, 5);
+std::vector<int> x2{ 5, 5 };
+```
+
+如果有一个类同时拥有满足列表初始化的构造函数，且其中一个是以`std::initializer_list`为参数，那么编译器将优先以`std::initializer_ list`为参数构造函数。由于这个特性的存在，我们在编写或阅读代码的时候就一定需要注意初始化代码的意图是什么，应该选择哪种方法对变量初始化。
+
+最后让我们回头看一看9.2节中没有解答的一个问题，`std::map<std:: string, int> x8{ {"bear",4},{"cassowary",2}, {"tiger",7} }`中两个层级的列表初始化分别使用了什么构造函数。其实答案已经非常明显了，内层`{"bear",4}`、`{"cassowary",2}`和`{"tiger",7}`都隐式调用了`std::pair`的构造函数`pair(const T1& x, const T2& y)`，而外层的`{…}`隐式调用的则是`std::map`的构造函数`map(std::initializer_list<value_ type>init, constAllocator&)`。
+
+## 指定初始化
+
+为了提高数据成员初始化的可读性和灵活性，C++20标准中引入了指定初始化的特性。该特性允许指定初始化数据成员的名称，从而使代码意图更加明确。让我们看一看示例：
+
+```cpp
+struct Point {
+	int x;
+	int y;
+};
+
+Point p { .x = 4, .y = 2 };
+```
+
+虽然在这段代码中Point的初始化并不如Point p{ 4, 2 };方便，但是这个例子却很好地展现了指定初始化语法。实际上，当初始化的结构体的数据成员比较多且真正需要赋值的只有少数成员的时候，这样的指定初始化就非常好用了：
+
+```cpp
+struct Point3D {
+	int x;
+	int y;
+	int z;
+};
+
+Point3D p{ .z = 3; }; // x = 0, y = 0
+```
+
+最后需要注意的是，并不是什么对象都能够指定初始化的。
+
+**它要求对象必须是一个聚合类型，例如下面的结构体就无法使用指定初始化：**
+
+```cpp
+struct Point3D {
+	Point3D() {}
+	int x;
+	int y;
+	int z;
+};
+
+Point3D p{ .z = 3 }; // 编译失败，Point3D不是一个聚合类型
+```
+
+如果不能提供构造函数，那么我们希望数据成员x和y的默认值不为0的时候应该怎么做？不要忘了，从C++11开始我们有了非静态成员变量直接初始化的方法，比如当希望Point3D的默认坐标值都是100时，代码可以修改为：
+
+```cpp
+struct Point3D {
+	int x = 100;
+	int y = 100;
+	int z = 100;
+};
+
+Point3D p{ .z = 3 }; // x = 100, y = 100, z = 3;
+```
+
+**指定的数据成员必须是非静态数据成员。这一点很好理解，静态数据成员不属于某个对象。**
+
+**每个非静态数据成员最多只能初始化一次：**
+
+```cpp
+Point p{ .y = 4, .y = 2 }; // 编译失败，y不能初始化多次
+```
+
+**非静态数据成员的初始化必须按照声明的顺序进行。** 请注意，这一点和C语言中指定初始化的要求不同，在C语言中，乱序的指定初始化是合法的，但C++不行。其实这一点也很好理解，因为C++中的数据成员会按照声明的顺序构造，按照顺序指定初始化会让代码更容易阅读：
+
+```cpp
+Point p{ .y = 4, .x = 2 }; // C++ 编译失败，C编译没问题
+```
+
+**针对联合体中的数据成员只能初始化一次，不能同时指定：**
+
+```cpp
+union u {
+	int a;
+	const char* b;
+};
+
+u f = { .a = 1};     // 编译成功
+u g = { .b = "asdf" };   // 编译成功
+u h = { .a = 1, .b = "asdf" };  // 编译失败，同时指定初始化联合体中的多个数据成员
+```
+
+**不能嵌套指定初始化数据成员。虽然这一点在C语言中也是允许的，但是C++标准认为这个特性很少有用，所以直接禁止了：**
+
+```cpp
+struct Line {
+	Point a;
+	Point b;
+};
+
+Line l{ .a.y = 5; }; // 编译失败, .a.y = 5访问了嵌套成员，不符合C++标准
+```
+
+当然，如果确实想嵌套指定初始化，我们可以换一种形式来达到目的：
+
+```cpp
+Line l{ .a {.y = 5} };
+```
+
+**在C++20中，一旦使用指定初始化，就不能混用其他方法对数据成员初始化了，而这一点在C语言中是允许的：**
+
+```cpp
+Point p{ .x = 2, 3 }; // 编译失败，混用数据成员的初始化
+```
+
+最后再来了解一下指定初始化在C语言中处理数组的能力，当然在C++中这同样是被禁止的：
+
+```cpp
+int arr[3] = { [1] = 5 }; // 编译失败
+```
+
+C++标准中给出的禁止理由非常简单，它的语法和lambda表达式冲突了。
+
+# 默认和删除函数
+
+## 类的特殊成员函数
+
+在定义一个类的时候，我们可能会省略类的构造函数，因为C++标准规定，在没有自定义构造函数的情况下，编译器会为类添加默认的构造函数。像这样有特殊待遇的成员函数一共有6个（C++11以前是4个），具体如下。
+
+- 默认构造函数。
+
+- 析构函数。
+
+- 复制构造函数。
+
+- 复制赋值运算符函数。
+
+- 移动构造函数（C++11新增）。
+
+- 移动赋值运算符函数（C++11新增）。
+
+添加默认特殊成员函数的这条特性非常实用，它让程序员可以有更多精力关注类本身的功能而不必为了某些语法特性而分心，同时也避免了让程序员编写重复的代码，比如：
+
+```cpp
+#include <string>
+#include <vector>
+class City {
+	std::string name;
+	std::vector<std::string> street_name;
+};
+
+int main() {
+	City a, b;
+	a = b;
+}
+```
+
+在上面的代码中，我们虽然没有为City类添加复制赋值运算符函数`City:: operator= (const City &)`，但是编译器仍然可以成功编译代码，并且在运行过程中正确地调用`std::string`和`std::vector<std::string>`的复制赋值运算符函数。假如编译器没有提供这条特性，我们就不得不在编写类的时候添加以下代码：
+
+```cpp
+City& City::operator = (const City & other) {
+	name = other.name;
+	street_name = other.street_name;
+	return *this;
+}
+```
+
+很明显，编写这段代码除了满足语法的需求以外没有其他意义，很庆幸可以把这件事情交给编译器去处理。不过还不能高兴得太早，因为该特性的存在也给我们带来了一些麻烦。
+
+- **声明任何构造函数都会抑制默认构造函数的添加。**
+
+- **一旦用自定义构造函数代替默认构造函数，类就将转变为非平凡类型。**
+
+- **没有明确的办法彻底禁止特殊成员函数的生成（C++11之前）。**
+
+```cpp
+#include <string>
+#include <vector>
+class City {
+	std::string name;
+	std::vector<std::string> street_name;
+public:
+	City(const char* n) : name(n) {}
+};
+
+int main() {
+	City a("wuhan");
+	City b; // 编译失败，自定义构造函数抑制了默认构造函数
+	b = a;
+}
+```
+
+以上代码由于添加了构造函数`City(const char *n)`，导致编译器不再为类提供默认构造函数，因此在声明对象b的时候出现编译错误，为了解决这个问题我们不得不添加一个无参数的构造函数：
+
+```cpp
+class City {
+	std::string name;
+	std::vector<std::string> street_name;
+public:
+	City(const char* n) : name(n) { }
+	City() {} // 新添加的构造函数
+};
+```
+
+可以看到这段代码新添加的构造函数什么也没做，但却必须定义。乍看虽然做了一些多此一举的工作，但是毕竟也能让程序重新编译和运行，问题得到了解决。真的是这样吗？事实上，我们又不知不觉地陷入另一个麻烦中，请看下面的代码：
+
+```cpp
+class Trivial {
+	int i;
+public:
+	Trivial(int n) : i(n), j(n) {}
+	Trivial() {}
+	int j;
+};
+
+int main() {
+	Trivial a(5);
+	Trivial b;
+	b = a;
+	std::cout << "std::is_trivial_v<Trivial> : " << std::is_trivial_v<Trivial> << std::endl;
+}
+```
+
+上面的代码中有两个动作会将`Trivial`类的类型从一个平凡类型转变为非平凡类型。第一是定义了一个构造函数`Trivial(int n)`，它导致编译器抑制添加默认构造函数，于是`Trivial`类转变为非平凡类型。第二是定义了一个无参数的构造函数，同样可以让`Trivial`类转变为非平凡类型。
+
