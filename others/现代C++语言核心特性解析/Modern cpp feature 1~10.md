@@ -1,6 +1,6 @@
 ---
 date: 2024-11-21 20:22:55
-date modified: 2024-11-24 22:58:42
+date modified: 2024-11-25 11:07:46
 title: Modern cpp feature 1~10
 tags:
   - cpp
@@ -555,7 +555,7 @@ int main() {
 
 在上面的代码中，函数f<5>()中5的类型为int，所以auto被推导为int类型。同理，f<'c'>()的auto被推导为char类型。由于f<5.0>()的5.0被推导为double类型，但是模板参数不能为double类型，因此导致编译失败。
 
-# decltype 说明符
+# `decltype` 说明符
 
 ## 回顾 typeof 和 typeid
 
@@ -2703,4 +2703,218 @@ int main() {
 ```
 
 上面的代码中有两个动作会将`Trivial`类的类型从一个平凡类型转变为非平凡类型。第一是定义了一个构造函数`Trivial(int n)`，它导致编译器抑制添加默认构造函数，于是`Trivial`类转变为非平凡类型。第二是定义了一个无参数的构造函数，同样可以让`Trivial`类转变为非平凡类型。
+
+最后一个问题大家肯定也都遇到过，举例来说，**有时候我们需要编写一个禁止复制操作的类，但是过去C++标准并没有提供这样的能力。** 聪明的程序员通过将复制构造函数和复制赋值运算符函数声明为private并且不提供函数实现的方式，间接地达成目的。为了使用方便，boost库也提供了noncopyable类辅助我们完成禁止复制的需求。
+
+不过就如前面的问题一样，虽然能间接地完成禁止复制的需求，但是这样的实现方法并不完美。比如，**友元就能够在编译阶段破坏类对复制的禁止。** 这里可能会有读者反驳，虽然友元能够访问私有的复制构造函数，但是别忘了，我们并没有实现这个函数，也就是说程序最后仍然无法运行。没错，**程序最后会在链接阶段报错**，原因是找不到复制构造函数的实现。但是这个报错显然来得有些晚，试想一下，如果面临的是一个巨大的项目，有不计其数的源文件需要编译，那么编译过程将非常耗时。如果某个错误需要等到编译结束以后的链接阶段才能确定，那么修改错误的时间代价将会非常高，所以**我们还是更希望能在编译阶段就找到错误。**
+
+还有一个典型的例子，禁止重载函数的某些版本，考虑下面的例子：
+
+```cpp
+class Base {
+	void foo(long &);
+public:
+	void foo(int) {}
+};
+
+int main() {
+	Base b;
+	long l = 5;
+	b.foo(8);
+	b.foo(l); // 编译错误
+}
+```
+
+假设现在我们需要继承Base类，并且实现子类的foo函数；另外，还想沿用基类Base的foo函数，于是这里使用using说明符将Base的foo成员函数引入子类，代码如下：
+
+```cpp
+class Base {
+	void foo(long &);
+public:
+	void foo(int) {}
+};
+
+class Derived : public Base {
+public:
+	using Base::foo;
+	void foo(const char*) {}
+};
+
+int main() {
+	Der   ived d;
+	d.foo("hello");
+	d.foo(5);
+}
+``` 
+
+上面这段代码看上去合情合理，而实际上却无法通过编译。因为using说明符无法将基类的私有成员函数引入子类当中，即使这里我
+
+们将代码d.foo(5)删除，即不再调用基类的函数，编译器也是不会
+
+让这段代码编译成功的。
+
+## 显式默认和显式删除
+
+为了解决以上种种问题，C++11标准提供了一种方法能够简单有效又精确地控制默认特殊成员函数的添加和删除，我们将这种方法叫作显式默认和显式删除。显式默认和显式删除的语法非常简单，只需要在声明函数的尾部添加`=default`和`=delete`，它们分别指示编译器添加特殊函数的默认版本以及删除指定的函数：
+
+```cpp
+struct type {
+	type() = default;
+	virtual ~type() = delete;
+	type(const type &);
+};
+type::type(const type &) = default;
+```
+
+以上代码显式地添加了默认构造和复制构造函数，同时也删除了析构函数。请注意，`=default`可以添加到类内部函数声明，也可以添加到类外部。这里默认构造函数的`=default`就是添加在类内部，而复制构造函数的`=default`则是添加在类外部。提供这种能力的意义在于，**它可以让我们在不修改头文件里函数声明的情况下，改变函数内部的行为**，例如：
+
+```cpp
+// type.h
+struct type {
+	type();
+	int x;
+};
+
+// type1.cpp
+type::type() = default;
+
+// type2.cpp
+type::type() { x = 3; }
+```
+
+=delete与=default不同，它必须添加在类内部的函数声明中，如果将其添加到类外部，那么会引发编译错误。
+
+通过使用=default，我们可以很容易地解决之前提到的前两个问题，请观察以下代码：
+
+```cpp
+class NonTrivial {
+	int i;
+public:
+	Nontrivial (int n) : i(n), j(n) {}
+	Nontrivial() {}
+	int j;
+};
+
+class Trivial {
+	int i;
+public:
+	Trivial(int n) : i(n), j(n) {}
+	Trivial() = default;
+	int j;
+};
+
+int main() {
+	Trivial a(5);
+	Trivial b;
+	b = a;
+	std::cout << "std::is_trivial_v<Trivial> : " << std::is_trivial_v<Trivial> << std::endl;
+	std::cout << "std::is_trivial_v<NonTrivial> : " << std::is_trivial_v<NonTrivial> << std::endl; 
+}
+```
+
+注意，我们只是将构造函数`NonTrivial() {}`替换为显式默认构造函数`Trivial() = default`，类就从非平凡类型恢复到平凡类型了。这样一来，既让编译器为类提供了默认构造函数，又保持了类本身的性质，可以说完美解决了之前的问题。
+
+```cpp
+class NonCopyable {
+public:
+	NonCopyable() = default; // 显示添加默认构造函数
+	NonCopyable(const NonCopyable&) = delete; // 显示删除复制构造函数
+	NonCopyable& operator=(const NonCopyable&) = delete; // 显示删除复制赋值运算符函数
+};
+
+int main() {
+	NonCopyable a, b;
+	a = b; // 编译失败，复制赋值运算符已被删除
+}
+```
+
+以上代码删除了类`NonCopyable`的复制构造函数和复制赋值运算符函数，这样就禁止了该类对象相互之间的复制操作。请注意，由于显式地删除了复制构造函数，导致默认情况下编译器也不再自动添加默认构造函数，因此我们必须显式地让编译器添加默认构造函数，否则会导致编译失败。
+
+最后，让我们用= delete来解决禁止重载函数的继承问题，这里只需要对基类Base稍作修改即可：
+
+```cpp
+class Base {
+// void foo(long &);
+public:
+	void foo(long &) = delete; // 删除 foo(long &) 函数
+	void foo(int) {}
+};
+
+class Derived : public Base {
+public:
+	using Base::foo;
+	void foo(const char*) {}
+};
+
+int main() {
+	Derived d;
+	d.foo("hello");
+	d.foo(5);
+}
+```
+
+请注意，上面对代码做了两处修改。第一是将`foo(long &)`函数从private移动到public，第二是显式删除该函数。如果只是显式删除了函数，却没有将函数移动到public，那么编译还是会出错的。
+
+## 显式删除的其他用法
+
+显式删除不仅适用于类的成员函数，对于普通函数同样有效。只不过相对于应用于成员函数，应用于普通函数的意义就不大了：
+
+```cpp
+void foo() = delete;
+static void bar() = delete;
+int main() {
+	bar(); // 编译失败，函数已经被显式删除
+	foo(); // 编译失败，函数已经被显式删除
+}
+```
+
+另外，显式删除还可以用于类的new运算符和类析构函数。显式删除特定类的new运算符可以阻止该类在堆上动态创建对象，换句话说它可以限制类的使用者只能通过自动变量、静态变量或者全局变量的方式创建对象，例如：
+
+```cpp
+struct type {
+	void* operator new(std::size_t) = delete;
+};
+
+type global_var;
+int main() {
+	static type static_var;
+	type auto_var;
+	type* var_ptr = new type; // 编译失败， 该类的 new 已被删除
+}
+```
+
+显式删除类的析构函数在某种程度上和删除new运算符的目的正好相反，它阻止类通过自动变量、静态变量或者全局变量的方式创建对象，但是却可以通过new运算符创建对象。原因是删除析构函数后，类无法进行析构。所以像自动变量、静态变量或者全局变量这种会隐式调用析构函数的对象就无法创建了，当然了，通过new运算符创建的对象也无法通过delete销毁，例如：
+
+```cpp
+struct type {
+	~type() = delete;
+};
+type global_var; // 编译失败，析构函数被删除无法隐式调用
+
+int main() {
+	static type static_var; // 编译失败，析构函数被删除无法隐式调用
+	type auto_var;          // 编译失败，析构函数被删除无法隐式调用
+	type* var_ptr = new type; 
+	delete var_ptr;         // 编译失败，析构函数被删除无法显式调用
+}
+```
+
+通过上面的代码可以看出，只有new创建对象会成功，其他创建和销毁操作都会失败，所以这样的用法并不多见，大部分情况可能在单例模式中出现。
+
+## explicit和=delete
+
+在类的构造函数上同时使用explicit和=delete是一个不明智的做法，它常常会造成代码行为混乱难以理解，应尽量避免这样做。下面这个例子就是反面教材：
+
+```cpp
+struct type {
+	type(long long) {}
+	explicit type(long) = delete;
+};
+void foo(type) {}
+
+int main() {
+	foo(type(58));
+	foo(58);
+}
+```
 
