@@ -1,6 +1,6 @@
 ---
 date: 2024-11-04 07:15:55
-date modified: 2024-11-04 10:55:01
+date modified: 2024-11-26 10:46:45
 title: Matrix Multiplication and  the Roofline Model
 tags:
   - course
